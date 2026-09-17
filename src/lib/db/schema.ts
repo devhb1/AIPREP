@@ -590,3 +590,108 @@ export type Topic = typeof topics.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type StudyPlan = typeof studyPlans.$inferSelect;
+
+export const panelProfiles = pgTable("panel_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  role: text("role"),
+  publicBio: text("public_bio"),
+  focusAreas: jsonb("focus_areas").$type<string[]>().default([]),
+  sourceUrls: jsonb("source_urls").$type<string[]>().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const interviewChecklists = pgTable("interview_checklists", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  items: jsonb("items")
+    .$type<Array<{ id: string; label: string; done: boolean; note?: string }>>()
+    .default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const interviewSessions = pgTable(
+  "interview_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    mode: text("mode").notNull().default("text"),
+    judgeMode: text("judge_mode").notNull().default("normal"),
+    status: text("status").notNull().default("active"),
+    targetMinutes: integer("target_minutes").default(20),
+    summary: text("summary"),
+    overallScore: real("overall_score"),
+    report: jsonb("report").$type<Record<string, unknown>>().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("interview_sessions_workspace_idx").on(table.workspaceId)],
+);
+
+export const interviewTurns = pgTable(
+  "interview_turns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => interviewSessions.id, { onDelete: "cascade" }),
+    turnIndex: integer("turn_index").notNull(),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    score: real("score"),
+    feedback: text("feedback"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("interview_turns_session_idx").on(table.sessionId)],
+);
+
+export const interviewAnswersLibrary = pgTable(
+  "interview_answers_library",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    prompt: text("prompt").notNull(),
+    answer: text("answer").notNull(),
+    improvedAnswer: text("improved_answer"),
+    tags: jsonb("tags").$type<string[]>().default([]),
+    sourceSessionId: uuid("source_session_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("interview_answers_library_workspace_idx").on(table.workspaceId)],
+);
+
+export const personalStories = pgTable("personal_stories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type InterviewSession = typeof interviewSessions.$inferSelect;
+export type InterviewTurn = typeof interviewTurns.$inferSelect;

@@ -210,11 +210,6 @@ export async function computeNextBestAction(params: {
     };
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
   const dueTasks = await db
     .select()
     .from(tasks)
@@ -223,6 +218,23 @@ export async function computeNextBestAction(params: {
     )
     .orderBy(asc(tasks.dueDate))
     .limit(20);
+
+  const interviewDrills = dueTasks.filter((t) => t.taskType === "interview_drill");
+  if (interviewDrills[0]) {
+    return {
+      title: interviewDrills[0].title,
+      why: "Post-mock interview remediation is high leverage close to interview day.",
+      priority: "HIGH" as const,
+      minutes: interviewDrills[0].estimatedMinutes ?? 20,
+      href: "today",
+      taskId: interviewDrills[0].id,
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
 
   const todays = dueTasks.filter((t) => {
     if (!t.dueDate) return false;

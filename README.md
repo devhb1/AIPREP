@@ -37,6 +37,16 @@ Personal AI exam/interview preparation OS. Beta focus: **KVS PRT Interview 2026*
 - Mistake notebook with remediation tasks
 - Next Best Action driven by claims, mistakes, and due tasks
 
+## Phase 4 features
+
+- Text mock interview (Easy / Normal / Strict judges)
+- Follow-up questioning + per-answer score/feedback
+- End-of-mock report with strengths, weaknesses, improved answers
+- Interview-day document checklist
+- Answer library + personal stories
+- Post-mock drills queued as tasks
+- Voice interview deferred to Phase 5
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill keys.
