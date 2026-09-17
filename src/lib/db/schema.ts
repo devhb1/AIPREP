@@ -634,11 +634,31 @@ export const interviewSessions = pgTable(
     summary: text("summary"),
     overallScore: real("overall_score"),
     report: jsonb("report").$type<Record<string, unknown>>().default({}),
+    recordingConsent: boolean("recording_consent").default(false),
+    speechMetrics: jsonb("speech_metrics").$type<Record<string, unknown>>().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("interview_sessions_workspace_idx").on(table.workspaceId)],
+);
+
+export const speechMetricsEvents = pgTable(
+  "speech_metrics_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => interviewSessions.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    metricType: text("metric_type").notNull(),
+    value: real("value"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("speech_metrics_events_session_idx").on(table.sessionId)],
 );
 
 export const interviewTurns = pgTable(

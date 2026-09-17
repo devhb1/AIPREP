@@ -2,6 +2,7 @@ export const MODELS = {
   fast: process.env.FAST_MODEL || "gpt-4.1-mini",
   reasoning: process.env.REASONING_MODEL || "gpt-4.1",
   embedding: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
+  voice: process.env.VOICE_MODEL || "gpt-4o-mini-realtime-preview",
 } as const;
 
 /** Rough USD estimates for cost tracking — tune as pricing changes */

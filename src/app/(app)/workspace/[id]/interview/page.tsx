@@ -217,7 +217,10 @@ export default function InterviewPage() {
         <h2 className="mt-2 text-4xl text-ink">Interview coach</h2>
         <p className="mt-2 text-sm text-muted">
           Text mock panel with Easy / Normal / Strict judges, checklist, answer
-          library, and post-mock drills. Voice arrives in Phase 5.
+          library, and post-mock drills.{" "}
+          <Link className="font-semibold text-accent" href={`/workspace/${workspaceId}/interview/live`}>
+            Open live voice interview →
+          </Link>
         </p>
       </div>
 

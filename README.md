@@ -47,6 +47,15 @@ Personal AI exam/interview preparation OS. Beta focus: **KVS PRT Interview 2026*
 - Post-mock drills queued as tasks
 - Voice interview deferred to Phase 5
 
+## Phase 5 features
+
+- OpenAI Realtime voice interview (WebRTC + ephemeral server token)
+- Live transcript, mute, timer
+- Recording/transcript consent gate
+- Speech metrics snapshot (fillers, turns, duration)
+- End-of-session evaluation reuses Phase 4 report + drills pipeline
+- Configure `VOICE_MODEL` (default `gpt-4o-mini-realtime-preview`)
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill keys.
