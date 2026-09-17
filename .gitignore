@@ -31,11 +31,15 @@ yarn-error.log*
 
 # env files
 .env
+.ENV
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 !.env.example
+
+# local scratch
+/tmp/
 
 # vercel
 .vercel

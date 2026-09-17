@@ -17,6 +17,10 @@ npm run db:migrate
 
 If the direct DB host fails (IPv6), use the **Session pooler** connection string, or paste the SQL files into the Supabase SQL Editor in order.
 
+**One-shot SQL Editor fallback:** paste `db/manual/ALL_for_sql_editor.sql` into Supabase → SQL Editor → Run. Then create a private Storage bucket named `documents` if it does not exist.
+
+**If pooler says password authentication failed:** Database Settings → reset database password → put the new password (URL-encoded) into the Session pooler URI in `.env` / Vercel.
+
 ## 2. Vercel project
 
 1. Push repo to GitHub/GitLab.
