@@ -413,3 +413,180 @@ export type Job = typeof jobs.$inferSelect;
 export type Claim = typeof claims.$inferSelect;
 export type MemoryItem = typeof memoryItems.$inferSelect;
 export type ResearchCampaign = typeof researchCampaigns.$inferSelect;
+
+export const subjects = pgTable(
+  "subjects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    weight: real("weight").default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("subjects_workspace_idx").on(table.workspaceId)],
+);
+
+export const topics = pgTable(
+  "topics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => subjects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    importance: real("importance").default(0.5),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("topics_workspace_idx").on(table.workspaceId)],
+);
+
+export const questions = pgTable(
+  "questions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    topicId: uuid("topic_id").references(() => topics.id, { onDelete: "set null" }),
+    subjectId: uuid("subject_id").references(() => subjects.id, { onDelete: "set null" }),
+    prompt: text("prompt").notNull(),
+    questionType: text("question_type").notNull().default("mcq"),
+    difficulty: text("difficulty").default("medium"),
+    explanation: text("explanation"),
+    sourceKind: text("source_kind").default("generated"),
+    groundingNote: text("grounding_note"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("questions_workspace_idx").on(table.workspaceId)],
+);
+
+export const questionOptions = pgTable("question_options", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  questionId: uuid("question_id")
+    .notNull()
+    .references(() => questions.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  content: text("content").notNull(),
+  isCorrect: boolean("is_correct").default(false).notNull(),
+});
+
+export const questionAttempts = pgTable(
+  "question_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    selectedOptionId: uuid("selected_option_id"),
+    answerText: text("answer_text"),
+    isCorrect: boolean("is_correct"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("question_attempts_workspace_idx").on(table.workspaceId)],
+);
+
+export const studyPlans = pgTable("study_plans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("active"),
+  summary: text("summary"),
+  startDate: timestamp("start_date", { withTimezone: true }),
+  endDate: timestamp("end_date", { withTimezone: true }),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    planId: uuid("plan_id").references(() => studyPlans.id, { onDelete: "set null" }),
+    topicId: uuid("topic_id").references(() => topics.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    taskType: text("task_type").default("study"),
+    status: text("status").notNull().default("pending"),
+    priority: text("priority").default("medium"),
+    estimatedMinutes: integer("estimated_minutes").default(25),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("tasks_workspace_status_idx").on(table.workspaceId, table.status),
+    index("tasks_due_date_idx").on(table.dueDate),
+  ],
+);
+
+export const userSkillStates = pgTable(
+  "user_skill_states",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    topicId: uuid("topic_id").references(() => topics.id, { onDelete: "cascade" }),
+    subjectId: uuid("subject_id").references(() => subjects.id, { onDelete: "cascade" }),
+    mastery: real("mastery").default(0.2).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    correct: integer("correct").default(0).notNull(),
+    lastPracticedAt: timestamp("last_practiced_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("user_skill_states_workspace_idx").on(table.workspaceId)],
+);
+
+export const mistakeEvents = pgTable(
+  "mistake_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id").references(() => questions.id, {
+      onDelete: "set null",
+    }),
+    topicId: uuid("topic_id").references(() => topics.id, { onDelete: "set null" }),
+    note: text("note"),
+    remediationTaskId: uuid("remediation_task_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("mistake_events_workspace_idx").on(table.workspaceId)],
+);
+
+export type Subject = typeof subjects.$inferSelect;
+export type Topic = typeof topics.$inferSelect;
+export type Question = typeof questions.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type StudyPlan = typeof studyPlans.$inferSelect;

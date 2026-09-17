@@ -28,6 +28,15 @@ Personal AI exam/interview preparation OS. Beta focus: **KVS PRT Interview 2026*
 - Mentor retrieval prioritizes approved memory over documents
 - YouTube gracefully unavailable without `YOUTUBE_API_KEY`
 
+## Phase 3 features
+
+- Syllabus generation from docs + trusted memory (KVS fallback)
+- Adaptive study plan + daily tasks
+- Today mission view
+- Grounded practice MCQs + attempts
+- Mistake notebook with remediation tasks
+- Next Best Action driven by claims, mistakes, and due tasks
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill keys.

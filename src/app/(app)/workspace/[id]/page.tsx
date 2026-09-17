@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { and, desc, eq, inArray, sql as dsql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { aiUsageEvents, claims, documents, workspaces } from "@/lib/db/schema";
+import { aiUsageEvents, documents, workspaces } from "@/lib/db/schema";
 import { daysUntil, formatDate } from "@/lib/utils";
+import { computeNextBestAction } from "@/lib/planning/planner";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -33,54 +34,18 @@ export default async function WorkspacePage({ params }: Props) {
     .orderBy(desc(aiUsageEvents.createdAt))
     .limit(30);
 
-  const pendingClaims = await db
-    .select({ count: dsql<number>`count(*)::int` })
-    .from(claims)
-    .where(
-      and(
-        eq(claims.workspaceId, id),
-        inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
-      ),
-    );
+  const nextBestAction = await computeNextBestAction({
+    workspaceId: id,
+    userId: user.id,
+  });
 
-  const pendingClaimCount = pendingClaims[0]?.count ?? 0;
   const readyDocs = docs.filter((d) => d.status === "ready").length;
-  const pendingDocs = docs.filter((d) =>
-    ["uploaded", "processing", "queued"].includes(d.status),
-  ).length;
   const days = daysUntil(workspace.interviewDate ?? workspace.examDate);
   const todaySpend = usage
     .filter((u) => new Date(u.createdAt) >= new Date(new Date().setHours(0, 0, 0, 0)))
     .reduce((sum, u) => sum + (u.estimatedCostUsd ?? 0), 0);
 
-  const nextBestAction =
-    pendingClaimCount > 0
-      ? {
-          title: `Review ${pendingClaimCount} research claim(s) in your inbox`,
-          why: "Evidence must be approved before it becomes trusted memory.",
-          priority: "HIGH",
-          minutes: 10,
-        }
-      : readyDocs === 0
-        ? {
-            title: "Upload your official KVS notification / syllabus PDF",
-            why: "Mentor answers are grounded in uploaded documents and approved memory.",
-            priority: "HIGH",
-            minutes: 10,
-          }
-        : pendingDocs > 0
-          ? {
-              title: "Wait for indexing to finish, then open Mentor chat",
-              why: `${pendingDocs} document(s) are still processing.`,
-              priority: "MEDIUM",
-              minutes: 5,
-            }
-          : {
-              title: "Run a quick research campaign for KVS PRT",
-              why: "Find public process/document facts, then approve only what you trust.",
-              priority: "HIGH",
-              minutes: 15,
-            };
+  const actionHref = `/workspace/${id}/${nextBestAction.href}`;
 
   return (
     <main className="mx-auto max-w-5xl space-y-8">
@@ -96,36 +61,28 @@ export default async function WorkspacePage({ params }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/workspace/${id}/documents`}
-            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
-          >
-            Documents
-          </Link>
-          <Link
-            href={`/workspace/${id}/research`}
-            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
-          >
-            Research
-          </Link>
-          <Link
-            href={`/workspace/${id}/inbox`}
-            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
-          >
-            Inbox{pendingClaimCount ? ` (${pendingClaimCount})` : ""}
-          </Link>
-          <Link
-            href={`/workspace/${id}/knowledge`}
-            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
-          >
-            Knowledge
-          </Link>
-          <Link
-            href={`/workspace/${id}/chat`}
-            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
-          >
-            Mentor chat
-          </Link>
+          {[
+            ["documents", "Documents"],
+            ["research", "Research"],
+            ["inbox", "Inbox"],
+            ["knowledge", "Knowledge"],
+            ["plan", "Plan"],
+            ["today", "Today"],
+            ["practice", "Practice"],
+            ["chat", "Mentor chat"],
+          ].map(([path, label]) => (
+            <Link
+              key={path}
+              href={`/workspace/${id}/${path}`}
+              className={
+                path === "chat"
+                  ? "rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
+              }
+            >
+              {label}
+            </Link>
+          ))}
         </div>
       </div>
 
@@ -135,19 +92,22 @@ export default async function WorkspacePage({ params }: Props) {
         </p>
         <h3 className="mt-3 text-3xl text-ink">{nextBestAction.title}</h3>
         <p className="mt-2 text-sm text-muted">{nextBestAction.why}</p>
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
           <span className="rounded-full bg-accent-soft px-3 py-1 font-semibold text-accent">
             Priority: {nextBestAction.priority}
           </span>
           <span className="text-muted">~{nextBestAction.minutes} min</span>
+          <Link href={actionHref} className="font-semibold text-accent">
+            Open →
+          </Link>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           ["Days remaining", days === null ? "—" : String(days)],
-          ["Documents", String(docs.length)],
-          ["Pending claims", String(pendingClaimCount)],
+          ["Documents ready", String(readyDocs)],
+          ["Docs total", String(docs.length)],
           ["Today AI $", todaySpend.toFixed(4)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">
