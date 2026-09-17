@@ -8,18 +8,10 @@ import {
 } from "@/lib/db/schema";
 import { createRealtimeEphemeralSession } from "@/lib/ai/realtime";
 import { endInterviewSession, type JudgeMode } from "@/lib/interview/session";
+import { voiceInterviewSystem } from "@prompts";
 
 function judgeVoiceInstructions(mode: JudgeMode, workspaceName: string) {
-  const base = `You are conducting a live voice mock interview for ${workspaceName} (KVS PRT style).
-Speak clearly and briefly. Ask one question at a time. Wait for the candidate to finish.
-Never invent private panelist personal data. Prefer pedagogy, classroom examples, and document readiness topics.`;
-  if (mode === "easy") {
-    return `${base} Be warm and encouraging. Soft follow-ups.`;
-  }
-  if (mode === "strict") {
-    return `${base} Be demanding. Probe vague answers immediately with sharp follow-ups.`;
-  }
-  return `${base} Be realistic and professional.`;
+  return voiceInterviewSystem(workspaceName, mode);
 }
 
 export async function startVoiceInterview(params: {

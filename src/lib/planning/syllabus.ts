@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
+import { syllabusSystem } from "@prompts";
 
 const syllabusSchema = z.object({
   subjects: z.array(
@@ -130,10 +131,7 @@ export async function generateSyllabus(params: {
   if (evidence.trim()) {
     const result = await chatCompletion({
       model: MODELS.fast,
-      system: `Build a compact KVS PRT interview syllabus from evidence only.
-Return STRICT JSON:
-{"subjects":[{"name":"...","description":"...","weight":1,"topics":[{"name":"...","description":"...","importance":0.8}]}]}
-Rules: do not invent official syllabus items absent from evidence; if evidence is thin, stick to broadly known PRT interview themes and mark descriptions cautiously.`,
+      system: syllabusSystem,
       user: `Workspace: ${workspace.name}\n\nEVIDENCE:\n${evidence || "None"}`,
       userId: params.userId,
       workspaceId: params.workspaceId,

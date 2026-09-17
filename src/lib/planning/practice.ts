@@ -14,6 +14,7 @@ import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
 import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
 import { generateSyllabus } from "@/lib/planning/syllabus";
+import { practiceMcqSystem } from "@prompts";
 
 const quizSchema = z.object({
   questions: z.array(
@@ -63,13 +64,7 @@ export async function generatePracticeSet(params: {
 
   const result = await chatCompletion({
     model: MODELS.fast,
-    system: `Create MCQ practice questions grounded in evidence.
-Return STRICT JSON:
-{"questions":[{"prompt":"...","explanation":"...","difficulty":"medium","groundingNote":"...","options":[{"label":"A","content":"...","isCorrect":true},{"label":"B","content":"...","isCorrect":false},{"label":"C","content":"...","isCorrect":false},{"label":"D","content":"...","isCorrect":false}]}]}
-Rules:
-- Exactly one correct option per question.
-- Do not invent official facts absent from evidence.
-- If evidence is weak, ask conceptual pedagogy questions and say so in groundingNote.`,
+    system: practiceMcqSystem,
     user: `Topic: ${topic.name}\nCount: ${params.count ?? 3}\n\nEVIDENCE:\n${evidence.slice(0, 10000)}`,
     userId: params.userId,
     workspaceId: params.workspaceId,

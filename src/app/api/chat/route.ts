@@ -8,6 +8,7 @@ import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
 import { chatCompletion } from "@/lib/ai/responses";
 import { rateLimit } from "@/lib/rate-limit";
 import { assertWithinDailyBudget } from "@/lib/analytics/usage";
+import { mentorSystem } from "@prompts";
 
 const bodySchema = z.object({
   workspaceId: z.string().uuid(),
@@ -108,22 +109,11 @@ export async function POST(request: Request) {
           })
           .join("\n\n");
 
-  const system = `You are the personal AI mentor inside AIPREP for workspace "${workspace.name}".
-Preparation type: ${workspace.preparationType}.
-Organization: ${workspace.organization ?? "n/a"}.
-Role: ${workspace.role ?? "n/a"}.
-
-Trust priority:
-1. USER_APPROVED trusted memory
-2. Uploaded document excerpts
-3. Never treat raw unverified web research as fact unless it appears here as trusted memory
-
-Rules:
-- Ground answers in the provided SOURCE EXCERPTS when available.
-- Never invent official rules, dates, or syllabus items that are not supported by excerpts.
-- If evidence is weak or missing, say so clearly using uncertainty language.
-- Prefer actionable next steps for KVS PRT interview preparation.
-- Include a short "Sources" section referencing [#n] citations when used.`;
+  const system = mentorSystem(workspace.name, {
+    preparationType: workspace.preparationType,
+    organization: workspace.organization,
+    role: workspace.role,
+  });
 
   const userPrompt = `USER QUESTION:
 ${message}

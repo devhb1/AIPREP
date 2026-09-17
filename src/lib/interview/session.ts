@@ -14,6 +14,12 @@ import {
 import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
 import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
+import {
+  interviewChecklistSystem,
+  interviewEvalSystem,
+  interviewFollowupSystem,
+  textInterviewSystem,
+} from "@prompts";
 
 export type JudgeMode = "easy" | "normal" | "strict";
 
@@ -93,9 +99,7 @@ export async function ensureInterviewChecklist(params: {
   if (evidence.trim()) {
     const result = await chatCompletion({
       model: MODELS.fast,
-      system: `Create an interview-day document checklist for KVS PRT.
-Return STRICT JSON: {"items":["..."]}
-Only include items supported by evidence; otherwise keep generic safe logistics items. Never invent private panel data.`,
+      system: interviewChecklistSystem,
       user: `Evidence:\n${evidence.slice(0, 8000)}`,
       userId: params.userId,
       workspaceId: params.workspaceId,
@@ -164,9 +168,8 @@ export async function startInterviewSession(params: {
 
   const opener = await chatCompletion({
     model: MODELS.fast,
-    system: `You are conducting a text mock interview for ${workspace.name}.
-${judgeInstructions(judgeMode)}
-Ask exactly ONE opening question. No preamble list. Stay in interviewer voice.`,
+    system: `${textInterviewSystem(workspace.name, judgeMode)}
+${judgeInstructions(judgeMode)}`,
     user: `Candidate role: ${workspace.role ?? "PRT"}
 Org: ${workspace.organization ?? "KVS"}
 Context excerpts (may be empty):
@@ -230,18 +233,8 @@ export async function answerInterviewTurn(params: {
 
   const result = await chatCompletion({
     model: MODELS.reasoning,
-    system: `Continue a KVS PRT mock interview.
-Judge mode: ${session.judgeMode}
-${judgeInstructions(session.judgeMode as JudgeMode)}
-
-Return STRICT JSON only:
-{"interviewerMessage":"...","isFollowUp":true,"score":0-10,"feedback":"short feedback on latest answer","shouldEnd":false}
-
-Rules:
-- One interviewer message only.
-- Prefer follow-ups that probe examples, child-centered pedagogy, classroom decisions.
-- If shouldSuggestEnd is warranted after enough turns, set shouldEnd true and ask a closing question or thank the candidate.
-- Never invent private panelist personal data.`,
+    system: `${interviewFollowupSystem(session.judgeMode)}
+${judgeInstructions(session.judgeMode as JudgeMode)}`,
     user: `Turn count (interviewer asks so far): ${elapsedTurns}
 Suggest end soon: ${shouldSuggestEnd}
 TRANSCRIPT:
@@ -338,10 +331,7 @@ export async function endInterviewSession(params: {
 
   const result = await chatCompletion({
     model: MODELS.reasoning,
-    system: `Evaluate a KVS PRT mock interview.
-Return STRICT JSON:
-{"overallScore":0-10,"summary":"...","strengths":["..."],"weaknesses":["..."],"improvedAnswers":[{"prompt":"...","original":"...","improved":"..."}],"drills":["..."]}
-Be specific and actionable. No private panel claims.`,
+    system: interviewEvalSystem,
     user: `Judge mode: ${session.judgeMode}\n\nTRANSCRIPT:\n${transcript.slice(0, 14000)}`,
     userId: params.userId,
     workspaceId: params.workspaceId,

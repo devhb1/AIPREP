@@ -14,6 +14,7 @@ import {
 import { chatCompletion } from "@/lib/ai/responses";
 import { webResearch } from "@/lib/ai/web-search";
 import { MODELS } from "@/lib/ai/models";
+import { claimExtractionSystem } from "@prompts";
 
 const claimSchema = z.object({
   claims: z.array(
@@ -159,15 +160,7 @@ export async function runResearchCampaign(campaignId: string) {
 
     const extraction = await chatCompletion({
       model: MODELS.fast,
-      system: `Extract candidate factual claims for a preparation knowledge inbox.
-Return STRICT JSON only:
-{"claims":[{"statement":"...","topic":"...","confidence":0.0,"assessment":"...","sourceUrls":["..."],"conflictNote":"..."}]}
-Rules:
-- Only include claims supported by the research notes.
-- Prefer concrete process/document/eligibility/interview facts.
-- Mark uncertain items with lower confidence.
-- Never invent official rules.
-- If YouTube-specific evidence is absent, do not invent video claims.`,
+      system: claimExtractionSystem,
       user: `Workspace: ${workspace.name}
 Topic: ${campaign.topic}
 

@@ -9,11 +9,13 @@
   - **Session pooler** `DATABASE_URL` (IPv4)
 - Upstash Redis REST URL + token
 - OpenAI API key with chat, embeddings, web_search, and (optional) Realtime access
-- All migrations applied:
+- All migrations applied (`001`–`007`):
 
 ```bash
 npm run db:migrate
 ```
+
+If the direct DB host fails (IPv6), use the **Session pooler** connection string, or paste the SQL files into the Supabase SQL Editor in order.
 
 ## 2. Vercel project
 
