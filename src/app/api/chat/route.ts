@@ -82,23 +82,31 @@ export async function POST(request: Request) {
     workspaceId,
     query: message,
     userId: user.id,
-    limit: 6,
+    limit: 8,
   });
 
   const contextBlock =
     chunks.length === 0
-      ? "No indexed document excerpts were retrieved. Say that you lack uploaded source evidence for this workspace and ask the user to upload official PDFs."
+      ? "No trusted memory or indexed document excerpts were retrieved. Say that evidence is missing and ask the user to upload PDFs and/or approve research claims."
       : chunks
-          .map(
-            (c, i) =>
-              `[#${i + 1}] ${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}\n${c.content}`,
-          )
+          .map((c, i) => {
+            const label =
+              c.kind === "memory"
+                ? `Trusted memory`
+                : `${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}`;
+            return `[#${i + 1}] (${c.kind}) ${label}\n${c.content}`;
+          })
           .join("\n\n");
 
   const system = `You are the personal AI mentor inside AIPREP for workspace "${workspace.name}".
 Preparation type: ${workspace.preparationType}.
 Organization: ${workspace.organization ?? "n/a"}.
 Role: ${workspace.role ?? "n/a"}.
+
+Trust priority:
+1. USER_APPROVED trusted memory
+2. Uploaded document excerpts
+3. Never treat raw unverified web research as fact unless it appears here as trusted memory
 
 Rules:
 - Ground answers in the provided SOURCE EXCERPTS when available.
@@ -124,7 +132,9 @@ ${contextBlock}`;
 
   const citations = chunks.map((c, i) => ({
     index: i + 1,
+    kind: c.kind,
     documentId: c.documentId,
+    memoryId: c.memoryId ?? null,
     title: c.title,
     pageNumber: c.pageNumber,
     excerpt: c.content.slice(0, 280),

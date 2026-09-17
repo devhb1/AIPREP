@@ -224,6 +224,192 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const researchCampaigns = pgTable(
+  "research_campaigns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    depth: text("depth").notNull().default("standard"),
+    status: text("status").notNull().default("queued"),
+    summary: text("summary"),
+    errorMessage: text("error_message"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("research_campaigns_workspace_idx").on(table.workspaceId),
+    index("research_campaigns_status_idx").on(table.status),
+  ],
+);
+
+export const researchQueries = pgTable("research_queries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  campaignId: uuid("campaign_id")
+    .notNull()
+    .references(() => researchCampaigns.id, { onDelete: "cascade" }),
+  cluster: text("cluster").notNull(),
+  query: text("query").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sources = pgTable(
+  "sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id").references(() => researchCampaigns.id, {
+      onDelete: "set null",
+    }),
+    url: text("url"),
+    title: text("title"),
+    publisher: text("publisher"),
+    sourceType: text("source_type").default("web"),
+    snippet: text("snippet"),
+    rawContent: text("raw_content"),
+    qualityScore: real("quality_score"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("sources_workspace_idx").on(table.workspaceId)],
+);
+
+export const researchResults = pgTable("research_results", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  campaignId: uuid("campaign_id")
+    .notNull()
+    .references(() => researchCampaigns.id, { onDelete: "cascade" }),
+  queryId: uuid("query_id").references(() => researchQueries.id, {
+    onDelete: "set null",
+  }),
+  sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const claims = pgTable(
+  "claims",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id").references(() => researchCampaigns.id, {
+      onDelete: "set null",
+    }),
+    statement: text("statement").notNull(),
+    status: text("status").notNull().default("CANDIDATE"),
+    confidence: real("confidence").default(0.5),
+    assessment: text("assessment"),
+    topic: text("topic"),
+    conflictNote: text("conflict_note"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("claims_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+export const claimSources = pgTable(
+  "claim_sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    supportLevel: text("support_level").default("mentioned"),
+    excerpt: text("excerpt"),
+  },
+  (table) => [uniqueIndex("claim_sources_uidx").on(table.claimId, table.sourceId)],
+);
+
+export const claimConflicts = pgTable("claim_conflicts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  claimIdA: uuid("claim_id_a")
+    .notNull()
+    .references(() => claims.id, { onDelete: "cascade" }),
+  claimIdB: uuid("claim_id_b")
+    .notNull()
+    .references(() => claims.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const memoryItems = pgTable(
+  "memory_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id").references(() => claims.id, { onDelete: "set null" }),
+    namespace: text("namespace").notNull().default("trusted"),
+    title: text("title"),
+    content: text("content").notNull(),
+    status: text("status").notNull().default("USER_APPROVED"),
+    version: integer("version").notNull().default(1),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("memory_items_workspace_namespace_idx").on(table.workspaceId, table.namespace),
+  ],
+);
+
+export const memoryVersions = pgTable("memory_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  memoryId: uuid("memory_id")
+    .notNull()
+    .references(() => memoryItems.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  content: text("content").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const memoryEmbeddings = pgTable(
+  "memory_embeddings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memoryItems.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    contentHash: text("content_hash"),
+    embedding: vector("embedding"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("memory_embeddings_workspace_idx").on(table.workspaceId)],
+);
+
 export type Workspace = typeof workspaces.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
+export type Claim = typeof claims.$inferSelect;
+export type MemoryItem = typeof memoryItems.$inferSelect;
+export type ResearchCampaign = typeof researchCampaigns.$inferSelect;

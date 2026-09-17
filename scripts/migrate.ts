@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { resolve } from "path";
 import postgres from "postgres";
 
@@ -9,18 +9,27 @@ async function main() {
     throw new Error("DATABASE_URL is required");
   }
 
-  const sql = postgres(url, { prepare: false, max: 1 });
-  const migrationPath = resolve(process.cwd(), "db/migrations/001_phase1.sql");
-  const migration = readFileSync(migrationPath, "utf8");
+  const withSsl = url.includes("sslmode=")
+    ? url
+    : `${url}${url.includes("?") ? "&" : "?"}sslmode=require`;
 
-  console.log("Running Phase 1 migration...");
+  const sql = postgres(withSsl, { prepare: false, max: 1, ssl: "require" });
+  const dir = resolve(process.cwd(), "db/migrations");
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+
   console.log(
-    "Tip: if auth fails, use Supabase Session pooler DATABASE_URL (IPv4), not direct db.*.supabase.co.",
+    "Tip: use Supabase Session pooler DATABASE_URL (IPv4) if direct db host fails.",
   );
-  await sql.unsafe(migration);
-  console.log("Migration complete.");
 
-  // Ensure storage bucket exists
+  for (const file of files) {
+    console.log(`Running ${file}...`);
+    const migration = readFileSync(resolve(dir, file), "utf8");
+    await sql.unsafe(migration);
+    console.log(`Done ${file}`);
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (supabaseUrl && serviceKey) {
@@ -52,6 +61,7 @@ async function main() {
   }
 
   await sql.end();
+  console.log("All migrations complete.");
 }
 
 main().catch((error) => {

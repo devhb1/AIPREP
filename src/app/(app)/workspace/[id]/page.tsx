@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql as dsql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { aiUsageEvents, documents, workspaces } from "@/lib/db/schema";
+import { aiUsageEvents, claims, documents, workspaces } from "@/lib/db/schema";
 import { daysUntil, formatDate } from "@/lib/utils";
 
 type Props = { params: Promise<{ id: string }> };
@@ -33,6 +33,17 @@ export default async function WorkspacePage({ params }: Props) {
     .orderBy(desc(aiUsageEvents.createdAt))
     .limit(30);
 
+  const pendingClaims = await db
+    .select({ count: dsql<number>`count(*)::int` })
+    .from(claims)
+    .where(
+      and(
+        eq(claims.workspaceId, id),
+        inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
+      ),
+    );
+
+  const pendingClaimCount = pendingClaims[0]?.count ?? 0;
   const readyDocs = docs.filter((d) => d.status === "ready").length;
   const pendingDocs = docs.filter((d) =>
     ["uploaded", "processing", "queued"].includes(d.status),
@@ -43,26 +54,33 @@ export default async function WorkspacePage({ params }: Props) {
     .reduce((sum, u) => sum + (u.estimatedCostUsd ?? 0), 0);
 
   const nextBestAction =
-    readyDocs === 0
+    pendingClaimCount > 0
       ? {
-          title: "Upload your official KVS notification / syllabus PDF",
-          why: "Phase 1 mentor answers are grounded only in documents you upload.",
+          title: `Review ${pendingClaimCount} research claim(s) in your inbox`,
+          why: "Evidence must be approved before it becomes trusted memory.",
           priority: "HIGH",
           minutes: 10,
         }
-      : pendingDocs > 0
+      : readyDocs === 0
         ? {
-            title: "Wait for indexing to finish, then open Mentor chat",
-            why: `${pendingDocs} document(s) are still processing.`,
-            priority: "MEDIUM",
-            minutes: 5,
-          }
-        : {
-            title: "Ask the mentor what to prepare first for KVS PRT",
-            why: "Your documents are indexed. Get a grounded briefing.",
+            title: "Upload your official KVS notification / syllabus PDF",
+            why: "Mentor answers are grounded in uploaded documents and approved memory.",
             priority: "HIGH",
-            minutes: 15,
-          };
+            minutes: 10,
+          }
+        : pendingDocs > 0
+          ? {
+              title: "Wait for indexing to finish, then open Mentor chat",
+              why: `${pendingDocs} document(s) are still processing.`,
+              priority: "MEDIUM",
+              minutes: 5,
+            }
+          : {
+              title: "Run a quick research campaign for KVS PRT",
+              why: "Find public process/document facts, then approve only what you trust.",
+              priority: "HIGH",
+              minutes: 15,
+            };
 
   return (
     <main className="mx-auto max-w-5xl space-y-8">
@@ -77,12 +95,30 @@ export default async function WorkspacePage({ params }: Props) {
             {formatDate(workspace.interviewDate)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             href={`/workspace/${id}/documents`}
             className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
           >
             Documents
+          </Link>
+          <Link
+            href={`/workspace/${id}/research`}
+            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
+          >
+            Research
+          </Link>
+          <Link
+            href={`/workspace/${id}/inbox`}
+            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
+          >
+            Inbox{pendingClaimCount ? ` (${pendingClaimCount})` : ""}
+          </Link>
+          <Link
+            href={`/workspace/${id}/knowledge`}
+            className="rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
+          >
+            Knowledge
           </Link>
           <Link
             href={`/workspace/${id}/chat`}
@@ -111,7 +147,7 @@ export default async function WorkspacePage({ params }: Props) {
         {[
           ["Days remaining", days === null ? "—" : String(days)],
           ["Documents", String(docs.length)],
-          ["Ready", String(readyDocs)],
+          ["Pending claims", String(pendingClaimCount)],
           ["Today AI $", todaySpend.toFixed(4)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">

@@ -19,6 +19,15 @@ Personal AI exam/interview preparation OS. Beta focus: **KVS PRT Interview 2026*
 - Mentor chat grounded in uploaded documents with citations
 - AI usage logging + Redis caching/rate limits
 
+## Phase 2 features
+
+- Research campaigns (OpenAI web_search, Redis-cached)
+- Candidate claim extraction
+- Research inbox approve / reject / unconfirmed / note
+- Trusted memory + embeddings
+- Mentor retrieval prioritizes approved memory over documents
+- YouTube gracefully unavailable without `YOUTUBE_API_KEY`
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill keys.
