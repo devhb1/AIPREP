@@ -6,9 +6,20 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
-import WebSocket from "ws";
 
-(globalThis as any).WebSocket = WebSocket;
+// Minimal stub so supabase-js can construct on Node without the `ws` package.
+class FakeWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+  readyState = FakeWebSocket.CLOSED;
+  close() {}
+  send() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+(globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeWebSocket;
 
 const BASE = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
   /\/$/,
