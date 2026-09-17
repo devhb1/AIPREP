@@ -7,6 +7,7 @@ import { requireUser, ensureProfile } from "@/lib/auth/session";
 import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
 import { chatCompletion } from "@/lib/ai/responses";
 import { rateLimit } from "@/lib/rate-limit";
+import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
 const bodySchema = z.object({
   workspaceId: z.string().uuid(),
@@ -34,6 +35,15 @@ export async function POST(request: Request) {
   }
 
   const { workspaceId, message, threadId } = parsed.data;
+
+  try {
+    await assertWithinDailyBudget({ workspaceId, userId: user.id });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Budget exceeded" },
+      { status: 429 },
+    );
+  }
 
   const [workspace] = await db
     .select()

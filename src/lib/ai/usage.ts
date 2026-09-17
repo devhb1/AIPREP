@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { aiUsageEvents } from "@/lib/db/schema";
 import { estimateCostUsd } from "./models";
+import { bumpDailySpendCache } from "@/lib/analytics/usage";
 
 export async function logAiUsage(params: {
   userId?: string | null;
@@ -33,6 +34,13 @@ export async function logAiUsage(params: {
     cached: params.cached ?? false,
     metadata: params.metadata ?? {},
   });
+
+  if (params.workspaceId && estimatedCostUsd > 0) {
+    await bumpDailySpendCache({
+      workspaceId: params.workspaceId,
+      amountUsd: estimatedCostUsd,
+    });
+  }
 
   return { estimatedCostUsd };
 }

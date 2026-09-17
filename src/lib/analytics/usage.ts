@@ -1,0 +1,143 @@
+import { and, eq, gte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { aiUsageEvents, workspaceSettings } from "@/lib/db/schema";
+import { redisSafe } from "@/lib/redis";
+
+function startOfUtcDay(date = new Date()) {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+export async function getWorkspaceDailySpendUsd(workspaceId: string) {
+  const start = startOfUtcDay();
+  const rows = await db
+    .select({
+      total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+    })
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.workspaceId, workspaceId),
+        gte(aiUsageEvents.createdAt, start),
+      ),
+    );
+  return Number(rows[0]?.total ?? 0);
+}
+
+export async function getUsageSummary(params: {
+  workspaceId: string;
+  userId?: string;
+}) {
+  const start = startOfUtcDay();
+  const week = new Date();
+  week.setUTCDate(week.getUTCDate() - 7);
+
+  const [todayRows, weekRows, byFeature] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+        calls: sql<number>`count(*)::int`,
+      })
+      .from(aiUsageEvents)
+      .where(
+        and(
+          eq(aiUsageEvents.workspaceId, params.workspaceId),
+          gte(aiUsageEvents.createdAt, start),
+        ),
+      ),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+        calls: sql<number>`count(*)::int`,
+      })
+      .from(aiUsageEvents)
+      .where(
+        and(
+          eq(aiUsageEvents.workspaceId, params.workspaceId),
+          gte(aiUsageEvents.createdAt, week),
+        ),
+      ),
+    db
+      .select({
+        feature: aiUsageEvents.feature,
+        total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+        calls: sql<number>`count(*)::int`,
+      })
+      .from(aiUsageEvents)
+      .where(
+        and(
+          eq(aiUsageEvents.workspaceId, params.workspaceId),
+          gte(aiUsageEvents.createdAt, week),
+        ),
+      )
+      .groupBy(aiUsageEvents.feature),
+  ]);
+
+  const settings = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, params.workspaceId))
+    .limit(1);
+
+  return {
+    todaySpendUsd: Number(todayRows[0]?.total ?? 0),
+    todayCalls: Number(todayRows[0]?.calls ?? 0),
+    weekSpendUsd: Number(weekRows[0]?.total ?? 0),
+    weekCalls: Number(weekRows[0]?.calls ?? 0),
+    byFeature: byFeature.map((row) => ({
+      feature: row.feature,
+      totalUsd: Number(row.total ?? 0),
+      calls: Number(row.calls ?? 0),
+    })),
+    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 1,
+  };
+}
+
+export async function assertWithinDailyBudget(params: {
+  workspaceId: string;
+  userId: string;
+}) {
+  const settings = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, params.workspaceId))
+    .limit(1);
+
+  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 1;
+  const redisKey = `spend:${params.workspaceId}:${startOfUtcDay().toISOString().slice(0, 10)}`;
+
+  const cached = await redisSafe(async (redis) => {
+    const value = await redis.get<number>(redisKey);
+    return value;
+  }, null);
+
+  const spent = cached ?? (await getWorkspaceDailySpendUsd(params.workspaceId));
+
+  if (cached == null) {
+    await redisSafe(async (redis) => {
+      await redis.set(redisKey, spent, { ex: 60 * 60 * 26 });
+      return true;
+    }, false);
+  }
+
+  if (spent >= maxDaily) {
+    throw new Error(
+      `Daily AI spend cap reached ($${spent.toFixed(4)} / $${maxDaily}). Raise the cap in Settings or wait until tomorrow.`,
+    );
+  }
+
+  return { spent, maxDaily };
+}
+
+export async function bumpDailySpendCache(params: {
+  workspaceId: string;
+  amountUsd: number;
+}) {
+  const redisKey = `spend:${params.workspaceId}:${startOfUtcDay().toISOString().slice(0, 10)}`;
+  await redisSafe(async (redis) => {
+    const current = (await redis.get<number>(redisKey)) ?? 0;
+    await redis.set(redisKey, current + params.amountUsd, { ex: 60 * 60 * 26 });
+    return true;
+  }, false);
+}

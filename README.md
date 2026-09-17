@@ -56,6 +56,15 @@ Personal AI exam/interview preparation OS. Beta focus: **KVS PRT Interview 2026*
 - End-of-session evaluation reuses Phase 4 report + drills pipeline
 - Configure `VOICE_MODEL` (default `gpt-4o-mini-realtime-preview`)
 
+## Phase 6 features
+
+- Daily AI spend caps enforced on chat/research/practice/interview/voice
+- Usage analytics by feature (Settings)
+- JSON workspace export + tasks `.ics` calendar export
+- In-app notifications table
+- SSRF-safe outbound fetch helper
+- `DEPLOY.md` + `vercel.json` production checklist
+
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill keys.

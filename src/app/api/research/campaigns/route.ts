@@ -13,6 +13,7 @@ import {
   runResearchCampaign,
 } from "@/lib/research/campaign";
 import { rateLimit } from "@/lib/rate-limit";
+import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
 export async function GET(request: Request) {
   const user = await requireUser();
@@ -71,6 +72,15 @@ export async function POST(request: Request) {
     .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, user.id)))
     .limit(1);
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  try {
+    await assertWithinDailyBudget({ workspaceId, userId: user.id });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Budget exceeded" },
+      { status: 429 },
+    );
+  }
 
   const topic = parsed.data.topic ?? `${workspace.name} preparation research`;
 

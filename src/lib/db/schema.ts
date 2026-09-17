@@ -715,3 +715,23 @@ export const personalStories = pgTable("personal_stories", {
 
 export type InterviewSession = typeof interviewSessions.$inferSelect;
 export type InterviewTurn = typeof interviewTurns.$inferSelect;
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
+    title: text("title").notNull(),
+    body: text("body"),
+    kind: text("kind").notNull().default("info"),
+    href: text("href"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("notifications_user_created_idx").on(table.userId, table.createdAt)],
+);

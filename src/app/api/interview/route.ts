@@ -17,6 +17,7 @@ import {
   type JudgeMode,
 } from "@/lib/interview/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -158,6 +159,14 @@ export async function POST(request: Request) {
   }
 
   if (action === "start") {
+    try {
+      await assertWithinDailyBudget({ workspaceId, userId: user.id });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Budget exceeded" },
+        { status: 429 },
+      );
+    }
     const result = await startInterviewSession({
       workspaceId,
       userId: user.id,
@@ -174,6 +183,14 @@ export async function POST(request: Request) {
   if (action === "answer") {
     if (!parsed.data.answer) {
       return NextResponse.json({ error: "answer required" }, { status: 400 });
+    }
+    try {
+      await assertWithinDailyBudget({ workspaceId, userId: user.id });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Budget exceeded" },
+        { status: 429 },
+      );
     }
     const result = await answerInterviewTurn({
       sessionId: parsed.data.sessionId,

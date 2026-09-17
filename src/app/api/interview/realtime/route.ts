@@ -10,6 +10,7 @@ import {
   startVoiceInterview,
 } from "@/lib/interview/voice";
 import { rateLimit } from "@/lib/rate-limit";
+import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -64,6 +65,17 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Recording/transcript consent is required for voice mocks." },
         { status: 400 },
+      );
+    }
+    try {
+      await assertWithinDailyBudget({
+        workspaceId: parsed.data.workspaceId,
+        userId: user.id,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Budget exceeded" },
+        { status: 429 },
       );
     }
     try {

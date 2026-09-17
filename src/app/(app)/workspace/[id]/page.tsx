@@ -70,6 +70,7 @@ export default async function WorkspacePage({ params }: Props) {
             ["today", "Today"],
             ["practice", "Practice"],
             ["interview", "Interview"],
+            ["settings", "Settings"],
             ["chat", "Mentor chat"],
           ].map(([path, label]) => (
             <Link
