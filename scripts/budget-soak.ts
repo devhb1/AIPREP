@@ -1,13 +1,14 @@
 /**
- * Soak: temporarily zero the daily AI cap, expect assertWithinDailyBudget to
- * throw the founder-facing message, then restore.
+ * Soak: zero the daily AI cap.
+ * Capped accounts must throw the founder-facing message.
+ * Allowlisted beta accounts skip the $ cap (10M token allotment instead).
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";
 import { db } from "../src/lib/db";
-import { workspaceSettings, workspaces } from "../src/lib/db/schema";
+import { profiles, workspaceSettings, workspaces } from "../src/lib/db/schema";
 import { assertWithinDailyBudget } from "../src/lib/analytics/usage";
-import { DEFAULT_DAILY_AI_USD } from "../src/lib/budget";
+import { DEFAULT_DAILY_AI_USD, isBetaUnlimitedEmail } from "../src/lib/budget";
 
 async function main() {
   const [ws] = await db
@@ -18,6 +19,13 @@ async function main() {
     console.error("FAIL  no workspace in DB");
     process.exit(1);
   }
+
+  const [profile] = await db
+    .select({ email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, ws.userId))
+    .limit(1);
+  const unlimited = isBetaUnlimitedEmail(profile?.email);
 
   const [row] = await db
     .select()
@@ -39,7 +47,11 @@ async function main() {
   let threw = false;
   let message = "";
   try {
-    await assertWithinDailyBudget({ workspaceId: ws.id, userId: ws.userId });
+    await assertWithinDailyBudget({
+      workspaceId: ws.id,
+      userId: ws.userId,
+      email: profile?.email,
+    });
   } catch (error) {
     threw = true;
     message = error instanceof Error ? error.message : String(error);
@@ -50,14 +62,21 @@ async function main() {
       .where(eq(workspaceSettings.workspaceId, ws.id));
   }
 
-  const ok =
-    threw &&
-    /Daily AI spend cap reached/i.test(message) &&
-    /00:00 UTC/i.test(message);
+  const ok = unlimited
+    ? !threw
+    : threw &&
+      /Daily AI spend cap reached/i.test(message) &&
+      /00:00 UTC/i.test(message);
 
   console.log(
-    `${ok ? "PASS" : "FAIL"}  budget_cap_reached — ${
-      threw ? message : "assertWithinDailyBudget did not throw at cap=0"
+    `${ok ? "PASS" : "FAIL"}  ${unlimited ? "unlimited_skips_daily_cap" : "budget_cap_reached"} — ${
+      unlimited
+        ? threw
+          ? message
+          : `allowlisted ${profile?.email ?? "unknown"} skipped $0 cap`
+        : threw
+          ? message
+          : "assertWithinDailyBudget did not throw at cap=0"
     }`,
   );
   console.log(

@@ -13,6 +13,9 @@ type Usage = {
   todayVoiceCalls?: number;
   maxDailyAiSpendUsd: number;
   maxDailyVoiceSpendUsd?: number;
+  unlimitedBeta?: boolean;
+  accountTokens?: number;
+  accountTokenCap?: number | null;
   byFeature: Array<{ feature: string; totalUsd: number; calls: number }>;
 };
 
@@ -150,6 +153,17 @@ export default function SettingsPage() {
 
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       {message ? <p className="text-sm text-[var(--ok)]">{message}</p> : null}
+
+      {usage?.unlimitedBeta ? (
+        <section className="rounded-[var(--radius-card)] border border-accent/30 bg-accent-soft p-4 text-sm">
+          <p className="font-semibold text-accent">Beta unlimited account</p>
+          <p className="mt-1 text-muted">
+            Daily $ caps are skipped. Allotment{" "}
+            {(usage.accountTokens ?? 0).toLocaleString()} /{" "}
+            {(usage.accountTokenCap ?? 10_000_000).toLocaleString()} tokens.
+          </p>
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {[

@@ -61,19 +61,27 @@ export function OnboardingChat({
     setBubbles((prev) => [...prev, { role, text: next }]);
   }
 
-  async function post(body: Record<string, unknown>) {
+  async function post(body: Record<string, unknown>): Promise<Record<string, any>> {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workspaceId, ...body }),
     });
-    const data = await res.json();
+    const raw = await res.text();
+    let data: Record<string, unknown> = {};
+    if (raw) {
+      try {
+        data = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        throw new Error(raw.slice(0, 180) || `Bad response (${res.status})`);
+      }
+    }
     if (!res.ok) {
       throw new Error(
         typeof data.error === "string" ? data.error : "Could not save that step",
       );
     }
-    return data;
+    return data as Record<string, any>;
   }
 
   function toggle(list: string[], value: string, setter: (v: string[]) => void) {
@@ -137,16 +145,31 @@ export function OnboardingChat({
     setBusy(true);
     setError(null);
     try {
-      const extracted = await post({
-        action: "onboarding_extract",
-        extractStep: "intro",
-        text: value,
-      });
-      const name = extracted.extracted?.candidateName as string | undefined;
-      const stage = extracted.extracted?.currentStage as string | undefined;
+      let extracted: {
+        extracted?: {
+          candidateName?: string;
+          currentStage?: string;
+          daysUntilInterview?: number;
+        };
+      } = {};
+      try {
+        extracted = (await post({
+          action: "onboarding_extract",
+          extractStep: "intro",
+          text: value,
+        })) as typeof extracted;
+      } catch {
+        extracted = {};
+      }
+      const daysMatch = value.match(/(\d{1,3})\s*(?:day|days)\b/i);
+      const name = extracted.extracted?.candidateName;
+      const stage = extracted.extracted?.currentStage;
       await advance(value, {
         candidateName: name ?? undefined,
         currentStage: stage ?? value.slice(0, 120),
+        daysUntilInterview:
+          extracted.extracted?.daysUntilInterview ??
+          (daysMatch ? Number(daysMatch[1]) : undefined),
         goals: "Clear KVS PRT interview with calm, example-rich answers",
       });
     } catch (err) {

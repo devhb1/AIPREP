@@ -89,34 +89,58 @@ export async function savePartialIntake(params: {
   return intake;
 }
 
+export function heuristicExtract(
+  step: "intro" | "date" | "constraints",
+  text: string,
+) {
+  const t = text.trim();
+  const extracted: z.infer<typeof extractSchema>["extracted"] = {};
+  const daysMatch = t.match(/(\d{1,3})\s*(?:day|days)\b/i);
+  if (daysMatch) {
+    extracted.daysUntilInterview = Math.max(1, Math.min(120, Number(daysMatch[1])));
+  }
+  if (step === "intro") {
+    const nameMatch = t.match(
+      /^(?:i am|i'm|im|this is)\s+([a-z][a-z .'-]{0,40}?)(?:[,.]|\s+i\b|$)/i,
+    );
+    if (nameMatch?.[1]) extracted.candidateName = nameMatch[1].trim();
+    extracted.currentStage = t.slice(0, 120);
+  }
+  if (step === "constraints" && t) {
+    extracted.constraintsNote = t.slice(0, 400);
+  }
+  return { extracted, clarifyingFollowUpNeeded: false };
+}
+
 export async function extractOnboardingText(params: {
   userId: string;
   workspaceId: string;
   step: "intro" | "date" | "constraints";
   text: string;
 }) {
-  const result = await chatCompletion({
-    model: MODELS.fast,
-    system: onboardingExtractSystem,
-    user: `Step: ${params.step}\nUser said:\n${params.text.slice(0, 1200)}`,
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-    feature: "onboarding_extract",
-    temperature: 0,
-    maxTokens: 220,
-  });
-
+  const fallback = heuristicExtract(params.step, params.text);
   try {
+    const result = await chatCompletion({
+      model: MODELS.fast,
+      system: onboardingExtractSystem,
+      user: `Step: ${params.step}\nUser said:\n${params.text.slice(0, 1200)}`,
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+      feature: "onboarding_extract",
+      temperature: 0,
+      maxTokens: 220,
+    });
+
     const match = result.content.match(/\{[\s\S]*\}/);
     const parsed = extractSchema.safeParse(JSON.parse(match ? match[0] : "{}"));
-    if (parsed.success) return parsed.data;
+    if (!parsed.success) return fallback;
+    return {
+      extracted: { ...fallback.extracted, ...parsed.data.extracted },
+      clarifyingFollowUpNeeded: parsed.data.clarifyingFollowUpNeeded ?? false,
+    };
   } catch {
-    // fall through
+    return fallback;
   }
-  return {
-    extracted: {},
-    clarifyingFollowUpNeeded: false,
-  };
 }
 
 export function draftToPlanIntake(draft: IntakeDraft): PlanIntake {

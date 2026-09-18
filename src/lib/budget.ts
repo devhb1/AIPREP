@@ -20,4 +20,22 @@ const formulaRaw =
 export const DEFAULT_DAILY_AI_USD = 1;
 export const DEFAULT_DAILY_VOICE_USD = 0.4;
 
+/** Per-account token allotment for allowlisted beta testers (skip daily $ caps). */
+export const BETA_ACCOUNT_TOKEN_CAP = 10_000_000;
+
+const DEFAULT_BETA_UNLIMITED_EMAILS = ["yisebo4819@dreameg.com"];
+
+export function betaUnlimitedEmails() {
+  const extra = (process.env.BETA_UNLIMITED_EMAILS ?? "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set([...DEFAULT_BETA_UNLIMITED_EMAILS, ...extra]);
+}
+
+export function isBetaUnlimitedEmail(email?: string | null) {
+  if (!email) return false;
+  return betaUnlimitedEmails().has(email.trim().toLowerCase());
+}
+
 export const APPENDIX_B_FORMULA_USD = Number(formulaRaw.toFixed(3));

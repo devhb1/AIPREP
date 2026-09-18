@@ -51,7 +51,11 @@ export async function POST(request: Request) {
   const { workspaceId, message, threadId } = parsed.data;
 
   try {
-    await assertWithinDailyBudget({ workspaceId, userId: user.id });
+    await assertWithinDailyBudget({
+      workspaceId,
+      userId: user.id,
+      email: user.email,
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({

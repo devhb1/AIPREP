@@ -1,8 +1,13 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { aiUsageEvents, workspaceSettings } from "@/lib/db/schema";
+import { aiUsageEvents, profiles, workspaceSettings } from "@/lib/db/schema";
 import { redisSafe } from "@/lib/redis";
-import { DEFAULT_DAILY_AI_USD, DEFAULT_DAILY_VOICE_USD } from "@/lib/budget";
+import {
+  BETA_ACCOUNT_TOKEN_CAP,
+  DEFAULT_DAILY_AI_USD,
+  DEFAULT_DAILY_VOICE_USD,
+  isBetaUnlimitedEmail,
+} from "@/lib/budget";
 
 function startOfUtcDay(date = new Date()) {
   const d = new Date(date);
@@ -101,6 +106,14 @@ export async function getUsageSummary(params: {
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
   const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? DEFAULT_DAILY_VOICE_USD);
 
+  let unlimited = false;
+  let accountTokens = 0;
+  if (params.userId) {
+    const email = await resolveEmail(params.userId);
+    unlimited = isBetaUnlimitedEmail(email);
+    if (unlimited) accountTokens = await getAccountTokenUsage(params.userId);
+  }
+
   return {
     todaySpendUsd: Number(todayRows[0]?.total ?? 0),
     todayCalls: Number(todayRows[0]?.calls ?? 0),
@@ -115,13 +128,53 @@ export async function getUsageSummary(params: {
     })),
     maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? DEFAULT_DAILY_AI_USD,
     maxDailyVoiceSpendUsd,
+    unlimitedBeta: unlimited,
+    accountTokens,
+    accountTokenCap: unlimited ? BETA_ACCOUNT_TOKEN_CAP : null,
   };
+}
+
+async function resolveEmail(userId: string, email?: string | null) {
+  if (email) return email;
+  const [row] = await db
+    .select({ email: profiles.email })
+    .from(profiles)
+    .where(eq(profiles.id, userId))
+    .limit(1);
+  return row?.email ?? null;
+}
+
+export async function getAccountTokenUsage(userId: string) {
+  const rows = await db
+    .select({
+      total: sql<number>`coalesce(sum(coalesce(${aiUsageEvents.inputTokens}, 0) + coalesce(${aiUsageEvents.outputTokens}, 0)), 0)`,
+    })
+    .from(aiUsageEvents)
+    .where(eq(aiUsageEvents.userId, userId));
+  return Number(rows[0]?.total ?? 0);
 }
 
 export async function assertWithinDailyBudget(params: {
   workspaceId: string;
   userId: string;
+  email?: string | null;
 }) {
+  const email = await resolveEmail(params.userId, params.email);
+  if (isBetaUnlimitedEmail(email)) {
+    const tokens = await getAccountTokenUsage(params.userId);
+    if (tokens >= BETA_ACCOUNT_TOKEN_CAP) {
+      throw new Error(
+        `Beta token allotment reached (${tokens.toLocaleString()} / ${BETA_ACCOUNT_TOKEN_CAP.toLocaleString()}).`,
+      );
+    }
+    return {
+      spent: 0,
+      maxDaily: Number.POSITIVE_INFINITY,
+      unlimited: true,
+      tokens,
+    };
+  }
+
   const settings = await db
     .select()
     .from(workspaceSettings)
@@ -157,8 +210,12 @@ export async function assertWithinDailyBudget(params: {
 export async function assertWithinVoiceBudget(params: {
   workspaceId: string;
   userId: string;
+  email?: string | null;
 }) {
-  await assertWithinDailyBudget(params);
+  const daily = await assertWithinDailyBudget(params);
+  if ("unlimited" in daily && daily.unlimited) {
+    return { spent: 0, maxVoice: Number.POSITIVE_INFINITY };
+  }
 
   const settings = await db
     .select()

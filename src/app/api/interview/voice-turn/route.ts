@@ -79,7 +79,11 @@ export async function POST(request: Request) {
       if (!workspace) return jsonError("Not found", 404);
 
       try {
-        await assertWithinDailyBudget({ workspaceId, userId: user.id });
+        await assertWithinDailyBudget({
+          workspaceId,
+          userId: user.id,
+          email: user.email,
+        });
       } catch (error) {
         return jsonError(
           error instanceof Error ? error.message : "Budget exceeded",
@@ -130,6 +134,7 @@ export async function POST(request: Request) {
         await assertWithinDailyBudget({
           workspaceId: startParsed.data.workspaceId,
           userId: user.id,
+          email: user.email,
         });
       } catch (error) {
         return jsonError(
@@ -160,6 +165,7 @@ export async function POST(request: Request) {
         await assertWithinDailyBudget({
           workspaceId: textParsed.data.workspaceId,
           userId: user.id,
+          email: user.email,
         });
       } catch (error) {
         return jsonError(

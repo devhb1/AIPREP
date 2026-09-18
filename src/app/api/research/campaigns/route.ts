@@ -133,7 +133,11 @@ export async function POST(request: Request) {
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
-    await assertWithinDailyBudget({ workspaceId, userId: user.id });
+    await assertWithinDailyBudget({
+      workspaceId,
+      userId: user.id,
+      email: user.email,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Budget exceeded" },

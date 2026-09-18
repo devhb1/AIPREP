@@ -13,6 +13,7 @@ import {
 import {
   draftToPlanIntake,
   extractOnboardingText,
+  heuristicExtract,
   savePartialIntake,
   type IntakeDraft,
 } from "@/lib/planning/onboarding";
@@ -112,6 +113,16 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  try {
+    return await handlePlanPost(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Plan request failed";
+    const status = /cap reached|budget|allotment/i.test(message) ? 429 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+async function handlePlanPost(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await ensureProfile(user);
@@ -158,17 +169,24 @@ export async function POST(request: Request) {
     if (!parsed.data.text || !parsed.data.extractStep) {
       return NextResponse.json({ error: "text and extractStep required" }, { status: 400 });
     }
-    await assertWithinDailyBudget({
-      workspaceId: parsed.data.workspaceId,
-      userId: user.id,
-    });
-    const extracted = await extractOnboardingText({
-      userId: user.id,
-      workspaceId: parsed.data.workspaceId,
-      step: parsed.data.extractStep,
-      text: parsed.data.text,
-    });
-    return NextResponse.json(extracted);
+    try {
+      await assertWithinDailyBudget({
+        workspaceId: parsed.data.workspaceId,
+        userId: user.id,
+        email: user.email,
+      });
+      const extracted = await extractOnboardingText({
+        userId: user.id,
+        workspaceId: parsed.data.workspaceId,
+        step: parsed.data.extractStep,
+        text: parsed.data.text,
+      });
+      return NextResponse.json(extracted);
+    } catch {
+      return NextResponse.json(
+        heuristicExtract(parsed.data.extractStep, parsed.data.text),
+      );
+    }
   }
 
   if (parsed.data.action === "onboarding_finish") {
