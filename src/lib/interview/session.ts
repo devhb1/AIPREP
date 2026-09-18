@@ -148,6 +148,7 @@ export async function startInterviewSession(params: {
   userId: string;
   judgeMode?: JudgeMode;
   targetMinutes?: number;
+  mode?: "text" | "voice";
 }) {
   const [workspace] = await db
     .select()
@@ -162,7 +163,7 @@ export async function startInterviewSession(params: {
     .values({
       workspaceId: params.workspaceId,
       userId: params.userId,
-      mode: "text",
+      mode: params.mode ?? "text",
       judgeMode,
       status: "active",
       targetMinutes: params.targetMinutes ?? 20,

@@ -252,12 +252,12 @@ export default function InterviewPage() {
       <section className="space-y-5 rounded-2xl border border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel p-5 sm:p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-            Primary
+            Primary · saves credits
           </p>
-          <h3 className="mt-2 text-2xl text-ink">Start live interview</h3>
+          <h3 className="mt-2 text-2xl text-ink">Start voice drill</h3>
           <p className="mt-1 text-sm text-muted">
-            Mic + Realtime panel. Choose language, then tap start on the next
-            screen (iOS needs a user gesture for mic).
+            Hold-to-talk turns: cheap STT + text panel + short TTS. Best for daily
+            practice without burning Realtime credits.
           </p>
         </div>
 
@@ -288,13 +288,40 @@ export default function InterviewPage() {
           </label>
         </div>
 
-        <button
-          type="button"
-          onClick={startLive}
-          className="min-h-12 w-full rounded-xl bg-accent px-4 py-3 text-base font-semibold text-white sm:w-auto"
-        >
-          Start live interview →
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const q = new URLSearchParams({
+                lang: language,
+                mode: judgeMode,
+                consent: "1",
+              });
+              router.push(`/workspace/${workspaceId}/interview/drill?${q.toString()}`);
+            }}
+            className="min-h-12 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white"
+          >
+            Open voice drill →
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTextMock(true)}
+            className="min-h-12 rounded-xl border border-line bg-white px-5 py-3 text-sm font-semibold"
+          >
+            Text mock (cheapest)
+          </button>
+        </div>
+        <p className="text-xs text-muted">
+          Continuous live Realtime is optional and expensive —{" "}
+          <button
+            type="button"
+            onClick={startLive}
+            className="font-semibold text-accent underline"
+          >
+            open live Realtime
+          </button>
+          .
+        </p>
       </section>
 
       {report ? (

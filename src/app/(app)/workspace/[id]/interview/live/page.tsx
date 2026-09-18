@@ -431,13 +431,17 @@ export default function LiveVoiceInterviewPage() {
         <Link href={`/workspace/${workspaceId}/interview`} className="text-sm text-accent">
           ← Interview hub
         </Link>
-        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Live voice interview</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Live Realtime (expensive)</h2>
         <p className="mt-2 text-sm text-muted">
-          Short drills only — Realtime bills while the mic session is open. Use{" "}
+          Always-on mic session — bills every second. Prefer{" "}
+          <Link href={`/workspace/${workspaceId}/interview/drill`} className="text-accent underline">
+            voice drill
+          </Link>{" "}
+          or{" "}
           <Link href={`/workspace/${workspaceId}/interview`} className="text-accent underline">
             text mock
           </Link>{" "}
-          for long practice (much cheaper).
+          for daily practice.
         </p>
       </div>
 
