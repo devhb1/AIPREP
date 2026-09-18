@@ -98,7 +98,7 @@ export async function getUsageSummary(params: {
     .limit(1);
 
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 3);
+  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 1);
 
   return {
     todaySpendUsd: Number(todayRows[0]?.total ?? 0),
@@ -165,7 +165,7 @@ export async function assertWithinVoiceBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 3);
+  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 1);
 
   const start = startOfUtcDay();
   const rows = await db

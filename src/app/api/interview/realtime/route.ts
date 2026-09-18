@@ -30,6 +30,7 @@ const bodySchema = z.object({
   judgeMode: z.enum(["easy", "normal", "strict"]).optional(),
   language: z.enum(["en", "hi", "mix"]).optional(),
   recordingConsent: z.boolean().optional(),
+  targetMinutes: z.number().int().min(3).max(12).optional(),
   turns: z
     .array(
       z.object({
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
           judgeMode: parsed.data.judgeMode,
           language: parsed.data.language,
           recordingConsent: true,
+          targetMinutes: parsed.data.targetMinutes,
         });
         return NextResponse.json(result);
       } catch (error) {

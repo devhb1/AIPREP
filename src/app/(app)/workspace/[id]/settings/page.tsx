@@ -37,7 +37,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [dailyCap, setDailyCap] = useState("5");
-  const [voiceCap, setVoiceCap] = useState("3");
+  const [voiceCap, setVoiceCap] = useState("1");
   const [researchCap, setResearchCap] = useState("20");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

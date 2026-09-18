@@ -51,6 +51,7 @@ export default function LiveVoiceInterviewPage() {
 
   const [judgeMode, setJudgeMode] = useState<"easy" | "normal" | "strict">("normal");
   const [language, setLanguage] = useState<InterviewLanguage>("en");
+  const [targetMinutes, setTargetMinutes] = useState(5);
   const [consent, setConsent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -69,6 +70,13 @@ export default function LiveVoiceInterviewPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const turnsRef = useRef<Turn[]>([]);
+  const endingRef = useRef(false);
+  const targetMinutesRef = useRef(targetMinutes);
+  const endVoiceRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    targetMinutesRef.current = targetMinutes;
+  }, [targetMinutes]);
 
   useEffect(() => {
     const lang = searchParams.get("lang");
@@ -76,6 +84,8 @@ export default function LiveVoiceInterviewPage() {
     const mode = searchParams.get("mode");
     if (mode === "easy" || mode === "normal" || mode === "strict") setJudgeMode(mode);
     if (searchParams.get("consent") === "1") setConsent(true);
+    const mins = Number(searchParams.get("mins"));
+    if ([3, 5, 8].includes(mins)) setTargetMinutes(mins);
   }, [searchParams]);
 
   useEffect(() => {
@@ -86,7 +96,13 @@ export default function LiveVoiceInterviewPage() {
     if (status !== "live") return;
     const timer = setInterval(() => {
       if (!startedAtRef.current) return;
-      setElapsedSec(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      setElapsedSec(elapsed);
+      const limit = targetMinutesRef.current * 60;
+      if (elapsed >= limit && !endingRef.current) {
+        endingRef.current = true;
+        void endVoiceRef.current?.();
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, [status]);
@@ -189,6 +205,7 @@ export default function LiveVoiceInterviewPage() {
           judgeMode,
           language,
           recordingConsent: true,
+          targetMinutes,
         }),
       });
       const bootData = await readJsonResponse(boot);
@@ -286,7 +303,8 @@ export default function LiveVoiceInterviewPage() {
   }
 
   async function endVoice() {
-    if (!sessionId) return;
+    if (!sessionId || status === "ending") return;
+    endingRef.current = true;
     setStatus("ending");
     setError(null);
     cleanupMedia();
@@ -300,7 +318,11 @@ export default function LiveVoiceInterviewPage() {
           action: "finish",
           sessionId,
           turns: turnsRef.current,
-          speechMetrics: metrics,
+          speechMetrics: {
+            ...metrics,
+            maxMinutes: targetMinutesRef.current,
+            autoEnded: elapsedSec >= targetMinutesRef.current * 60,
+          },
         }),
       });
       const data = await readJsonResponse(res);
@@ -311,16 +333,20 @@ export default function LiveVoiceInterviewPage() {
       setStatus("done");
       const finishedId = sessionId;
       setSessionId(null);
+      endingRef.current = false;
       if (finishedId) {
         router.push(
           `/workspace/${workspaceId}/interview/scorecard?sessionId=${finishedId}`,
         );
       }
     } catch (err) {
+      endingRef.current = false;
       setStatus("idle");
       setError(err instanceof Error ? err.message : "Finalize failed");
     }
   }
+
+  endVoiceRef.current = endVoice;
 
   const mm = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
   const ss = String(elapsedSec % 60).padStart(2, "0");
@@ -336,6 +362,9 @@ export default function LiveVoiceInterviewPage() {
             </p>
             <p className="text-lg font-semibold text-ink">
               {mm}:{ss}
+              <span className="ml-2 text-sm font-normal text-muted">
+                / {targetMinutes}:00
+              </span>
             </p>
           </div>
           <div className="flex gap-2">
@@ -404,10 +433,18 @@ export default function LiveVoiceInterviewPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Live voice interview</h2>
         <p className="mt-2 text-sm text-muted">
-          Tap Start with mic allowed. On iPhone, stay on this tab — backgrounding may
-          drop the session.
+          Short drills only — Realtime bills while the mic session is open. Use{" "}
+          <Link href={`/workspace/${workspaceId}/interview`} className="text-accent underline">
+            text mock
+          </Link>{" "}
+          for long practice (much cheaper).
         </p>
       </div>
+
+      <p className="rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink">
+        Tip: 3–5 minutes is enough for delivery practice. Longer sessions burn credits
+        fast (~audio in + audio out every second).
+      </p>
 
       {error ? (
         <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]">
@@ -456,6 +493,19 @@ export default function LiveVoiceInterviewPage() {
               <option value="easy">Easy</option>
               <option value="normal">Normal</option>
               <option value="strict">Strict</option>
+            </select>
+          </label>
+          <label className="block text-sm sm:col-span-2">
+            <span className="mb-1 block text-muted">Duration (auto-ends)</span>
+            <select
+              value={targetMinutes}
+              disabled={status === "connecting"}
+              onChange={(e) => setTargetMinutes(Number(e.target.value))}
+              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            >
+              <option value={3}>3 min — cheapest drill</option>
+              <option value={5}>5 min — default</option>
+              <option value={8}>8 min — longer (costs more)</option>
             </select>
           </label>
         </div>

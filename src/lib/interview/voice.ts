@@ -24,6 +24,8 @@ export async function startVoiceInterview(params: {
   judgeMode?: JudgeMode;
   language?: InterviewLanguage;
   recordingConsent?: boolean;
+  /** Keep short — Realtime bills audio continuously. Default 5. */
+  targetMinutes?: number;
 }) {
   const [workspace] = await db
     .select()
@@ -34,6 +36,7 @@ export async function startVoiceInterview(params: {
 
   const judgeMode = params.judgeMode ?? "normal";
   const language = params.language ?? "en";
+  const targetMinutes = Math.min(Math.max(params.targetMinutes ?? 5, 3), 12);
   const [session] = await db
     .insert(interviewSessions)
     .values({
@@ -42,7 +45,7 @@ export async function startVoiceInterview(params: {
       mode: "voice",
       judgeMode,
       status: "active",
-      targetMinutes: 20,
+      targetMinutes,
       recordingConsent: Boolean(params.recordingConsent),
       speechMetrics: {
         language,
@@ -51,6 +54,7 @@ export async function startVoiceInterview(params: {
         candidateTurns: 0,
         interviewerTurns: 0,
         totalCandidateChars: 0,
+        maxMinutes: targetMinutes,
       },
     })
     .returning();
@@ -59,6 +63,7 @@ export async function startVoiceInterview(params: {
     instructions: judgeVoiceInstructions(judgeMode, workspace.name, language),
     userId: params.userId,
     workspaceId: params.workspaceId,
+    maxMinutes: targetMinutes,
   });
 
   return {

@@ -8,14 +8,14 @@ function resolveVoiceModel() {
     process.env.VOICE_MODEL ||
     MODELS.voice ||
     "gpt-realtime-mini";
-  // Map retired preview names still common in env to GA equivalents.
-  if (raw.includes("mini") && raw.includes("realtime")) {
+  // Always prefer mini for beta cost control unless explicitly set to a non-mini id.
+  if (raw === "gpt-realtime" || raw === "gpt-realtime-2" || raw === "gpt-realtime-2.1") {
+    return raw;
+  }
+  if (raw.includes("mini") || raw.includes("realtime")) {
     return "gpt-realtime-mini";
   }
-  if (raw.includes("realtime")) {
-    return "gpt-realtime";
-  }
-  return raw;
+  return "gpt-realtime-mini";
 }
 
 export async function createRealtimeEphemeralSession(params: {
@@ -23,26 +23,40 @@ export async function createRealtimeEphemeralSession(params: {
   voice?: string;
   userId?: string | null;
   workspaceId?: string | null;
+  /** Soft cap hint — client also auto-ends. */
+  maxMinutes?: number;
 }) {
   const openai = getOpenAI();
   const model = resolveVoiceModel();
   const voice = params.voice || "alloy";
+  const maxMinutes = Math.min(Math.max(params.maxMinutes ?? 5, 3), 12);
 
   const created = await openai.realtime.clientSecrets.create({
-    expires_after: { anchor: "created_at", seconds: 600 },
+    expires_after: {
+      anchor: "created_at",
+      // Secret TTL ≈ session window; don't mint long-lived keys.
+      seconds: Math.min(60 + maxMinutes * 60, 900),
+    },
     session: {
       type: "realtime",
       model: model as "gpt-realtime-mini",
-      instructions: params.instructions,
+      instructions: `${params.instructions}
+
+COST DISCIPLINE: Keep answers short (2–4 sentences). Ask one question at a time. Do not monologue. Prefer silence over filler.`,
       output_modalities: ["audio"],
+      // Cap how long each model reply can run (cuts audio-output tokens hard).
+      max_output_tokens: 220,
       audio: {
         input: {
-          transcription: { model: "whisper-1" },
+          // Cheaper than whisper-1 for input transcripts used in scorecards.
+          transcription: { model: "gpt-4o-mini-transcribe" },
           turn_detection: {
             type: "server_vad",
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600,
+            threshold: 0.55,
+            prefix_padding_ms: 200,
+            // Longer silence → fewer turns → far less audio-out spend.
+            silence_duration_ms: 900,
+            create_response: true,
           },
         },
         output: { voice },
@@ -55,11 +69,14 @@ export async function createRealtimeEphemeralSession(params: {
     workspaceId: params.workspaceId,
     feature: "realtime_session_create",
     model,
-    inputTokens: 0,
-    outputTokens: 0,
+    // Rough planning estimate so daily voice budget actually gates (OpenAI bills by audio tokens).
+    inputTokens: Math.round(maxMinutes * 600),
+    outputTokens: Math.round(maxMinutes * 400),
     cached: false,
     metadata: {
       expiresAt: created.expires_at,
+      maxMinutes,
+      estimateNote: "pre-charge estimate for budget gate; actual OpenAI invoice may differ",
     },
   });
 
@@ -68,5 +85,6 @@ export async function createRealtimeEphemeralSession(params: {
     sessionId: null,
     clientSecret: created.value,
     expiresAt: created.expires_at,
+    maxMinutes,
   };
 }
