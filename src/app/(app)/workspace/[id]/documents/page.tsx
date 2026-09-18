@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import {
+  MULTIPART_MAX_BYTES,
+  uploadPdfToWorkspace,
+} from "@/lib/documents/client-upload";
 
 type Doc = {
   id: string;
@@ -12,8 +16,6 @@ type Doc = {
   pageCount: number | null;
   errorMessage: string | null;
 };
-
-const MULTIPART_MAX = 4 * 1024 * 1024;
 
 export default function DocumentsPage() {
   const params = useParams<{ id: string }>();
@@ -43,62 +45,28 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 3000);
-    return () => clearInterval(timer);
   }, [workspaceId]);
 
-  async function uploadViaSigned(pdf: File) {
-    const signRes = await fetch("/api/documents/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "sign",
-        workspaceId,
-        fileName: pdf.name,
-        byteSize: pdf.size,
-      }),
-    });
-    const signData = await signRes.json().catch(() => ({}));
-    if (!signRes.ok) {
-      throw new Error(
-        typeof signData.error === "string"
-          ? signData.error
-          : "Could not start direct upload",
-      );
-    }
-
-    const put = await fetch(signData.signedUrl as string, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/pdf",
-        ...(signData.token ? { "x-upsert": "false" } : {}),
-      },
-      body: pdf,
-    });
-    if (!put.ok) {
-      const text = await put.text().catch(() => "");
-      throw new Error(text.slice(0, 180) || `Direct storage upload failed (${put.status})`);
-    }
-
-    const completeRes = await fetch("/api/documents/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "complete",
-        workspaceId,
-        documentId: signData.document?.id,
-      }),
-    });
-    const completeData = await completeRes.json().catch(() => ({}));
-    if (!completeRes.ok && completeRes.status !== 202) {
-      throw new Error(
-        typeof completeData.error === "string"
-          ? completeData.error
-          : "Could not finalize upload",
-      );
-    }
-    return completeData;
-  }
+  useEffect(() => {
+    const busy = docs.some(
+      (d) => d.status === "queued" || d.status === "processing" || d.status === "uploaded",
+    );
+    if (!busy) return;
+    const started = Date.now();
+    const id = setInterval(() => {
+      if (Date.now() - started > 90_000) {
+        clearInterval(id);
+        return;
+      }
+      void load();
+    }, 2500);
+    return () => clearInterval(id);
+  }, [
+    workspaceId,
+    docs.some(
+      (d) => d.status === "queued" || d.status === "processing" || d.status === "uploaded",
+    ),
+  ]);
 
   async function onUpload(e: FormEvent) {
     e.preventDefault();
@@ -107,32 +75,7 @@ export default function DocumentsPage() {
     setError(null);
     setMessage(null);
     try {
-      if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
-        setError("Only PDF uploads are supported. On iPhone, Share → Save as PDF.");
-        return;
-      }
-
-      let data: Record<string, unknown>;
-      if (file.size > MULTIPART_MAX) {
-        data = await uploadViaSigned(file);
-      } else {
-        const body = new FormData();
-        body.append("file", file);
-        body.append("workspaceId", workspaceId);
-        const res = await fetch("/api/documents/upload", {
-          method: "POST",
-          body,
-        });
-        data = await res.json().catch(() => ({}));
-        if (res.status === 413 || data.code === "USE_SIGNED_UPLOAD") {
-          data = await uploadViaSigned(file);
-        } else if (!res.ok && res.status !== 202) {
-          throw new Error(
-            typeof data.error === "string" ? data.error : `Upload failed (${res.status})`,
-          );
-        }
-      }
-
+      const data = await uploadPdfToWorkspace({ workspaceId, file });
       setMessage(
         typeof data.message === "string"
           ? data.message
@@ -158,8 +101,8 @@ export default function DocumentsPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-6 pb-24">
       <div>
-        <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
-          ← Workspace
+        <Link href={`/workspace/${workspaceId}/memory?tab=documents`} className="text-sm text-accent">
+          ← Memory
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Documents</h2>
         <p className="mt-2 text-sm text-muted">
@@ -181,7 +124,7 @@ export default function DocumentsPage() {
         {file ? (
           <p className="text-xs text-muted">
             {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
-            {file.size > MULTIPART_MAX ? " · direct upload" : ""}
+            {file.size > MULTIPART_MAX_BYTES ? " · direct upload" : ""}
           </p>
         ) : null}
         <button

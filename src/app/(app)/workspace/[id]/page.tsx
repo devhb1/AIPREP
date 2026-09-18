@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { formatDate, formatDaysRemaining } from "@/lib/utils";
 import { getWorkspaceBootstrap } from "@/lib/workspaces/bootstrap";
 import { WorkspaceChipNav } from "@/components/workspace-nav";
+import { InstallHomeScreenBanner } from "@/components/install-banner";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -20,6 +21,7 @@ export default async function WorkspacePage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 pb-24">
+      <InstallHomeScreenBanner />
       <div className="space-y-4">
         <div>
           <Link href="/dashboard" className="text-sm text-accent">
@@ -69,8 +71,8 @@ export default async function WorkspacePage({ params }: Props) {
       </section>
 
       <p className="text-sm text-muted">
-        Flow: Documents → Research → approve in Memory → Plan intake → live voice
-        interview.
+        Flow: Upload PDFs in Memory → Research → approve in Memory → Plan intake →
+        live voice interview.
       </p>
     </main>
   );

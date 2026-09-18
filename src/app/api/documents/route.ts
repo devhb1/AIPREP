@@ -24,8 +24,10 @@ export async function GET(request: Request) {
     .select({
       id: documents.id,
       title: documents.title,
+      fileName: documents.fileName,
       status: documents.status,
       pageCount: documents.pageCount,
+      errorMessage: documents.errorMessage,
       createdAt: documents.createdAt,
     })
     .from(documents)

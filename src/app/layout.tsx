@@ -26,6 +26,9 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "192x192" }],
+  },
   other: {
     "mobile-web-app-capable": "yes",
   },

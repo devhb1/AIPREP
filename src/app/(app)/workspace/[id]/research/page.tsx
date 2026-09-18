@@ -83,7 +83,14 @@ export default function ResearchPage() {
 
   useEffect(() => {
     if (!running) return;
-    const timer = setInterval(() => void load(), 2000);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > 120_000) {
+        clearInterval(timer);
+        return;
+      }
+      void load();
+    }, 2500);
     return () => clearInterval(timer);
   }, [running, workspaceId]);
 

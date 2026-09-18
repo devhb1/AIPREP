@@ -41,6 +41,8 @@ export default function SettingsPage() {
   const [researchCap, setResearchCap] = useState("20");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   async function load() {
     const [mainRes, notifRes] = await Promise.all([
@@ -104,6 +106,34 @@ export default function SettingsPage() {
     a.download = `aiprep-export-${workspaceId}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function resetWorkspace() {
+    setError(null);
+    setMessage(null);
+    setResetting(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          action: "reset_workspace",
+          confirmText: resetConfirm,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Reset failed");
+        return;
+      }
+      setMessage(data.message ?? "Workspace reset.");
+      setResetConfirm("");
+    } catch {
+      setError("Network error during reset");
+    } finally {
+      setResetting(false);
+    }
   }
 
   return (
@@ -217,6 +247,37 @@ export default function SettingsPage() {
             Download tasks calendar (.ics)
           </a>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-[var(--danger)]/30 bg-panel p-5">
+        <h3 className="text-xl text-ink">Reset workspace</h3>
+        <p className="text-sm text-muted">
+          Clears research claims, memory, PDFs, plans, tasks, interviews, and stories
+          for this workspace. Keeps your login. Type <span className="font-semibold">RESET</span>{" "}
+          to confirm.
+        </p>
+        <input
+          value={resetConfirm}
+          onChange={(e) => setResetConfirm(e.target.value)}
+          placeholder="Type RESET"
+          className="min-h-11 w-full rounded-xl border border-line px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          disabled={resetting || resetConfirm.trim().toUpperCase() !== "RESET"}
+          onClick={() => void resetWorkspace()}
+          className="min-h-11 rounded-xl bg-[var(--danger)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {resetting ? "Resetting…" : "Wipe prep data"}
+        </button>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-line bg-panel p-5">
+        <h3 className="text-xl text-ink">Add to Home Screen</h3>
+        <p className="text-sm text-muted">
+          On iPhone Safari: Share → Add to Home Screen. AIPREP opens as a full-screen
+          mini app.
+        </p>
       </section>
 
       <section className="space-y-3 rounded-2xl border border-line bg-panel p-5">

@@ -6,6 +6,7 @@ import { notifications, workspaceSettings, workspaces } from "@/lib/db/schema";
 import { ensureProfile, requireUser } from "@/lib/auth/session";
 import { getUsageSummary } from "@/lib/analytics/usage";
 import { buildTasksIcs, exportWorkspaceBundle } from "@/lib/export/workspace";
+import { resetWorkspaceContent } from "@/lib/workspaces/reset";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -78,13 +79,19 @@ export async function GET(request: Request) {
 
 const bodySchema = z.object({
   workspaceId: z.string().uuid(),
-  action: z.enum(["update_settings", "mark_notification_read", "create_notification"]),
+  action: z.enum([
+    "update_settings",
+    "mark_notification_read",
+    "create_notification",
+    "reset_workspace",
+  ]),
   maxDailyAiSpendUsd: z.number().min(0.1).max(50).optional(),
   maxDailyVoiceSpendUsd: z.number().min(0.1).max(50).optional(),
   maxResearchQueries: z.number().int().min(1).max(100).optional(),
   notificationId: z.string().uuid().optional(),
   title: z.string().optional(),
   body: z.string().optional(),
+  confirmText: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -99,6 +106,31 @@ export async function POST(request: Request) {
 
   const workspace = await assertWorkspace(user.id, parsed.data.workspaceId);
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (parsed.data.action === "reset_workspace") {
+    if (parsed.data.confirmText?.trim().toUpperCase() !== "RESET") {
+      return NextResponse.json(
+        { error: "Type RESET to confirm workspace wipe" },
+        { status: 400 },
+      );
+    }
+    try {
+      const result = await resetWorkspaceContent({
+        workspaceId: parsed.data.workspaceId,
+        userId: user.id,
+      });
+      return NextResponse.json({
+        message:
+          "Workspace prep data cleared. Re-run research, upload PDFs, and plan intake.",
+        ...result,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Reset failed" },
+        { status: 500 },
+      );
+    }
+  }
 
   if (parsed.data.action === "update_settings") {
     const existing = await db
