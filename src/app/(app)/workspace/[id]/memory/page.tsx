@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import {
-  MULTIPART_MAX_BYTES,
-  uploadPdfToWorkspace,
-} from "@/lib/documents/client-upload";
+import { uploadPdfToWorkspace } from "@/lib/documents/client-upload";
 import { InstallHomeScreenBanner } from "@/components/install-banner";
+import { PdfPickButton } from "@/components/pdf-pick-button";
 
 type Tab = "all" | "scraped" | "approved" | "notes" | "stories" | "documents";
 
@@ -250,18 +248,11 @@ export default function MemoryPage() {
             Official notices, syllabus, PYQs. On iPhone: Files → Share as PDF.
           </p>
           <form onSubmit={onUpload} className="mt-3 space-y-3">
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm"
+            <PdfPickButton
+              file={file}
+              onFile={setFile}
+              disabled={uploading}
             />
-            {file ? (
-              <p className="text-xs text-muted">
-                {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
-                {file.size > MULTIPART_MAX_BYTES ? " · direct upload" : ""}
-              </p>
-            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="submit"

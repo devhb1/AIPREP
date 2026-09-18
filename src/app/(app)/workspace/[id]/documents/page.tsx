@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import {
-  MULTIPART_MAX_BYTES,
-  uploadPdfToWorkspace,
-} from "@/lib/documents/client-upload";
+import { uploadPdfToWorkspace } from "@/lib/documents/client-upload";
+import { PdfPickButton } from "@/components/pdf-pick-button";
 
 type Doc = {
   id: string;
@@ -115,18 +113,7 @@ export default function DocumentsPage() {
         onSubmit={onUpload}
         className="space-y-4 rounded-2xl border border-line bg-panel p-5"
       >
-        <input
-          type="file"
-          accept="application/pdf,.pdf"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm"
-        />
-        {file ? (
-          <p className="text-xs text-muted">
-            {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
-            {file.size > MULTIPART_MAX_BYTES ? " · direct upload" : ""}
-          </p>
-        ) : null}
+        <PdfPickButton file={file} onFile={setFile} disabled={loading} />
         <button
           type="submit"
           disabled={!file || loading}
