@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   claims,
@@ -189,102 +189,100 @@ async function computeNextBestActionFresh(params: {
   workspaceId: string;
   userId: string;
 }): Promise<NextBestAction> {
-  const [pendingClaims, docStats, openMistakes, dueTasks, lastMock] = await Promise.all([
-    db
-      .select({ id: claims.id })
-      .from(claims)
-      .where(
-        and(
-          eq(claims.workspaceId, params.workspaceId),
-          inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
-        ),
-      )
-      .limit(5),
-    db
-      .select({
-        total: count(),
-        ready: sql<number>`sum(case when ${documents.status} = 'ready' then 1 else 0 end)`,
-        pending: sql<number>`sum(case when ${documents.status} in ('uploaded','processing','queued') then 1 else 0 end)`,
-      })
-      .from(documents)
-      .where(eq(documents.workspaceId, params.workspaceId)),
-    db
-      .select()
-      .from(mistakeEvents)
-      .where(eq(mistakeEvents.workspaceId, params.workspaceId))
-      .orderBy(desc(mistakeEvents.createdAt))
-      .limit(5),
-    db
-      .select()
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.workspaceId, params.workspaceId),
-          eq(tasks.status, "pending"),
-        ),
-      )
-      .orderBy(asc(tasks.dueDate))
-      .limit(20),
-    db
-      .select({
-        report: interviewSessions.report,
-        overallScore: interviewSessions.overallScore,
-        endedAt: interviewSessions.endedAt,
-      })
-      .from(interviewSessions)
-      .where(
-        and(
-          eq(interviewSessions.workspaceId, params.workspaceId),
-          eq(interviewSessions.status, "completed"),
-        ),
-      )
-      .orderBy(desc(interviewSessions.endedAt))
-      .limit(1),
-  ]);
+  const [pendingClaims, conflictingClaims, docStats, openMistakes, dueTasks, lastMock] =
+    await Promise.all([
+      db
+        .select({ id: claims.id })
+        .from(claims)
+        .where(
+          and(
+            eq(claims.workspaceId, params.workspaceId),
+            eq(claims.status, "CANDIDATE"),
+          ),
+        )
+        .limit(12),
+      db
+        .select({ id: claims.id })
+        .from(claims)
+        .where(
+          and(
+            eq(claims.workspaceId, params.workspaceId),
+            eq(claims.status, "CONFLICTING"),
+          ),
+        )
+        .limit(3),
+      db
+        .select({
+          total: count(),
+          ready: sql<number>`sum(case when ${documents.status} = 'ready' then 1 else 0 end)`,
+          pending: sql<number>`sum(case when ${documents.status} in ('uploaded','processing','queued') then 1 else 0 end)`,
+        })
+        .from(documents)
+        .where(eq(documents.workspaceId, params.workspaceId)),
+      db
+        .select()
+        .from(mistakeEvents)
+        .where(eq(mistakeEvents.workspaceId, params.workspaceId))
+        .orderBy(desc(mistakeEvents.createdAt))
+        .limit(5),
+      db
+        .select()
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.workspaceId, params.workspaceId),
+            eq(tasks.status, "pending"),
+          ),
+        )
+        .orderBy(asc(tasks.dueDate))
+        .limit(20),
+      db
+        .select({
+          report: interviewSessions.report,
+          overallScore: interviewSessions.overallScore,
+          endedAt: interviewSessions.endedAt,
+        })
+        .from(interviewSessions)
+        .where(
+          and(
+            eq(interviewSessions.workspaceId, params.workspaceId),
+            eq(interviewSessions.status, "completed"),
+          ),
+        )
+        .orderBy(desc(interviewSessions.endedAt))
+        .limit(1),
+    ]);
 
   const readyDocs = Number(docStats[0]?.ready ?? 0);
   const pendingDocs = Number(docStats[0]?.pending ?? 0);
+  const hasCompletedMock = Boolean(lastMock[0]);
 
-  if (pendingClaims.length) {
+  // 1. Interview-first: zero completed mocks → run first panel (never claims/docs).
+  if (!hasCompletedMock) {
     return {
-      title: `Review ${pendingClaims.length}+ research claim(s)`,
-      why: "Unapproved evidence should not drive your plan.",
+      title: "Run your first mock panel interview",
+      why: "This is the real panel practice — everything else supports it.",
       priority: "HIGH" as const,
       minutes: 10,
-      href: "memory",
+      href: "interview/mock",
     };
   }
 
-  if (readyDocs === 0) {
-    return {
-      title: "Upload official KVS PDFs",
-      why: "Syllabus and quizzes need grounded source material.",
-      priority: "HIGH" as const,
-      minutes: 10,
-      href: "memory?tab=documents",
-    };
-  }
-
-  if (pendingDocs > 0) {
-    return {
-      title: "Wait for document indexing",
-      why: `${pendingDocs} document(s) are still being processed.`,
-      priority: "MEDIUM" as const,
-      minutes: 5,
-      href: "memory?tab=documents",
-    };
-  }
-
-  const recs = (lastMock[0]?.report as { focusRecommendations?: Array<{
-    topic?: string;
-    reason?: string;
-    suggestedAction?: string;
-  }> } | null)?.focusRecommendations;
+  // 2. Fresh mock focus recommendation (7-day window for short prep cycles).
+  const recs = (
+    lastMock[0]?.report as {
+      focusRecommendations?: Array<{
+        topic?: string;
+        reason?: string;
+        suggestedAction?: string;
+      }>;
+    } | null
+  )?.focusRecommendations;
   const rec = recs?.[0];
   const endedAt = lastMock[0]?.endedAt;
   const mockIsFresh =
     endedAt != null &&
-    Date.now() - new Date(endedAt).getTime() < 1000 * 60 * 60 * 48;
+    Date.now() - new Date(endedAt).getTime() < 1000 * 60 * 60 * 24 * 7;
   const mockNeedsWork =
     lastMock[0]?.overallScore == null || Number(lastMock[0].overallScore) < 8;
   if (rec?.suggestedAction && mockIsFresh && mockNeedsWork) {
@@ -299,16 +297,7 @@ async function computeNextBestActionFresh(params: {
     };
   }
 
-  if (openMistakes.length >= 3) {
-    return {
-      title: "Remediate recent mistakes",
-      why: "Repeated errors should be fixed before new topics.",
-      priority: "HIGH" as const,
-      minutes: 20,
-      href: "learn/mistakes",
-    };
-  }
-
+  // 3. Pending interview drills from eval.
   const interviewDrills = dueTasks.filter((t) => t.taskType === "interview_drill");
   if (interviewDrills[0]) {
     return {
@@ -316,11 +305,23 @@ async function computeNextBestActionFresh(params: {
       why: "Post-mock interview remediation is high leverage close to interview day.",
       priority: "HIGH" as const,
       minutes: interviewDrills[0].estimatedMinutes ?? 20,
-      href: "",
+      href: "interview",
       taskId: interviewDrills[0].id,
     };
   }
 
+  // 4. Mistake remediation.
+  if (openMistakes.length >= 3) {
+    return {
+      title: "Remediate recent mistakes",
+      why: "Repeated errors should be fixed before the next panel run.",
+      priority: "HIGH" as const,
+      minutes: 20,
+      href: "learn/mistakes",
+    };
+  }
+
+  // 5. Today's plan tasks / next pending.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
@@ -343,13 +344,51 @@ async function computeNextBestActionFresh(params: {
     };
   }
 
+  // 6. Claims only when inbox is genuinely blocking (≥8) or conflicts exist.
+  if (conflictingClaims.length > 0 || pendingClaims.length >= 8) {
+    const n = conflictingClaims.length > 0
+      ? conflictingClaims.length
+      : pendingClaims.length;
+    return {
+      title: `Review ${n}+ research claim(s)`,
+      why:
+        conflictingClaims.length > 0
+          ? "Conflicting evidence needs your call before it shapes prep."
+          : "Large unapproved inbox — clear it so mentor stays grounded.",
+      priority: "MEDIUM" as const,
+      minutes: 10,
+      href: "memory",
+    };
+  }
+
+  // 7. Docs soft secondary — only after at least one mock.
+  if (readyDocs === 0) {
+    return {
+      title: "Upload official KVS PDFs",
+      why: "Ground the next mock and mentor answers in your documents.",
+      priority: "MEDIUM" as const,
+      minutes: 10,
+      href: "memory?tab=documents",
+    };
+  }
+
+  if (pendingDocs > 0) {
+    return {
+      title: "Wait for document indexing",
+      why: `${pendingDocs} document(s) are still being processed.`,
+      priority: "LOW" as const,
+      minutes: 5,
+      href: "memory?tab=documents",
+    };
+  }
+
   if (!dueTasks.length) {
     return {
-      title: "Generate your adaptive study plan",
-      why: "Turn syllabus + weak areas into daily tasks.",
+      title: "Run another mock panel",
+      why: "Keep sharpening panel answers until interview day.",
       priority: "HIGH" as const,
-      minutes: 5,
-      href: "plan",
+      minutes: 10,
+      href: "interview/mock",
     };
   }
 

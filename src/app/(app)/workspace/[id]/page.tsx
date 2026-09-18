@@ -31,13 +31,19 @@ export default async function WorkspacePage({ params }: Props) {
     } | null
   )?.intake;
   const needsOnboarding = !intake?.completedAt && !intake?.daysUntilInterview;
+  const mockFocused =
+    nextBestAction.href.startsWith("interview") ||
+    nextBestAction.title.toLowerCase().includes("mock");
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 pb-24">
       <InstallHomeScreenBanner />
       {needsOnboarding ? <OnboardingChat workspaceId={id} /> : null}
       <div>
-        <p className="text-sm text-muted">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+          Your interview mission
+        </p>
+        <p className="mt-1 text-sm text-muted">
           {formatDaysRemaining(stats.daysRemaining)} until interview
           {workspace.interviewDate ? ` · ${formatDate(workspace.interviewDate)}` : ""}
         </p>
@@ -61,12 +67,27 @@ export default async function WorkspacePage({ params }: Props) {
               : nextBestAction.title}
           </Link>
         </div>
+        {mockFocused ? (
+          <p className="mt-3 text-xs text-muted">
+            Also:{" "}
+            <Link
+              href={`/workspace/${id}/memory`}
+              className="font-semibold text-accent"
+            >
+              Approve memory inbox
+            </Link>{" "}
+            when you have facts waiting — it never blocks the panel.
+          </p>
+        ) : null}
       </Card>
 
       <section className="grid grid-cols-3 gap-3">
         {[
           ["Days left", formatDaysRemaining(stats.daysRemaining)],
-          ["Last mock", stats.lastMockScore == null ? "—" : String(stats.lastMockScore)],
+          [
+            "Last mock",
+            stats.lastMockScore == null ? "None yet" : String(stats.lastMockScore),
+          ],
           ["Docs ready", String(stats.readyDocuments)],
         ].map(([label, value]) => (
           <div key={label} className="surface-card p-4">
@@ -76,7 +97,7 @@ export default async function WorkspacePage({ params }: Props) {
         ))}
       </section>
 
-      <TodayMission workspaceId={id} />
+      <TodayMission workspaceId={id} hasMock={stats.lastMockScore != null} />
     </main>
   );
 }

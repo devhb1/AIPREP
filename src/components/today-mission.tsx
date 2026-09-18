@@ -14,7 +14,13 @@ type Task = {
   priority: string | null;
 };
 
-export function TodayMission({ workspaceId }: { workspaceId: string }) {
+export function TodayMission({
+  workspaceId,
+  hasMock = false,
+}: {
+  workspaceId: string;
+  hasMock?: boolean;
+}) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +77,21 @@ export function TodayMission({ workspaceId }: { workspaceId: string }) {
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       {todays.length === 0 ? (
         <p className="rounded-2xl border border-line bg-panel p-5 text-sm text-muted">
-          No tasks due today.{" "}
-          <Link className="font-semibold text-accent" href={`/workspace/${workspaceId}/plan`}>
-            Open your plan
+          {hasMock
+            ? "No mission tasks due today. Run another mock or open your plan."
+            : "No mission tasks yet — run a mock to generate today’s drills."}{" "}
+          <Link
+            className="font-semibold text-accent"
+            href={`/workspace/${workspaceId}/interview/mock`}
+          >
+            Start mock panel
+          </Link>
+          {" · "}
+          <Link
+            className="font-semibold text-accent"
+            href={`/workspace/${workspaceId}/plan`}
+          >
+            Open plan
           </Link>
           .
         </p>

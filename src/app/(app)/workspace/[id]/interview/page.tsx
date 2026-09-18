@@ -248,8 +248,9 @@ export default function InterviewPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Interview hub</h2>
         <p className="mt-2 text-sm text-muted">
-          Voice-first KVS PRT mocks in English, Hindi, or Hinglish — then a real
-          scorecard.
+          {sessions.length === 0
+            ? "First panel run — this is the front door of your prep. HR opens, pedagogy probes, GA, then HR closes."
+            : "Voice-first KVS PRT mocks in English, Hindi, or Hinglish — then a real scorecard."}
         </p>
       </div>
 
@@ -258,9 +259,13 @@ export default function InterviewPage() {
       <section className="surface-card space-y-5 border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-            Primary
+            {sessions.length === 0 ? "First panel run" : "Primary"}
           </p>
-          <h3 className="mt-2 text-2xl text-ink">Start mock panel interview</h3>
+          <h3 className="mt-2 text-2xl text-ink">
+            {sessions.length === 0
+              ? "Run your first mock panel interview"
+              : "Start mock panel interview"}
+          </h3>
           <p className="mt-1 text-sm text-muted">
             HR opens, pedagogy probes, general awareness, HR closes. Speak or type.
           </p>

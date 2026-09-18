@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation";
 
 export const WORKSPACE_NAV = [
   { path: "", label: "Home", match: "exact" as const },
+  { path: "interview", label: "Interview", match: "prefix" as const },
   { path: "learn", label: "Learn", match: "prefix" as const },
   { path: "memory", label: "Memory", match: "prefix" as const },
-  { path: "interview", label: "Interview", match: "prefix" as const },
   { path: "plan", label: "Plan", match: "prefix" as const },
 ] as const;
 
