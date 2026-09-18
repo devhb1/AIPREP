@@ -7,6 +7,7 @@ import {
   studyPlans,
   tasks,
   userSkillStates,
+  workspaceSettings,
   workspaces,
 } from "@/lib/db/schema";
 import { generateSyllabus } from "./syllabus";
@@ -16,6 +17,7 @@ export async function createAdaptivePlan(params: {
   workspaceId: string;
   userId: string;
   days?: number;
+  hoursPerDay?: number;
 }) {
   const syllabus = await generateSyllabus(params);
   const [workspace] = await db
@@ -35,7 +37,11 @@ export async function createAdaptivePlan(params: {
       ),
     );
 
-  const horizon = params.days ?? Math.min(Math.max(daysUntil(workspace.interviewDate) ?? 14, 7), 21);
+  const daysLeft = daysUntil(workspace.interviewDate);
+  const horizon =
+    params.days ??
+    Math.min(Math.max(daysLeft != null && daysLeft > 0 ? daysLeft : 14, 7), 21);
+  const hoursPerDay = params.hoursPerDay ?? workspace.dailyStudyHours ?? 1.5;
   const start = new Date();
   const end = new Date();
   end.setDate(end.getDate() + horizon);
@@ -61,11 +67,14 @@ export async function createAdaptivePlan(params: {
       userId: params.userId,
       title: `${workspace.name} — ${horizon}-day plan`,
       status: "active",
-      summary:
-        "Adaptive plan from syllabus importance + current mastery. Weak topics get earlier slots.",
+      summary: `Personal ${horizon}-day plan (~${hoursPerDay}h/day) from intake + mastery. Weak topics get earlier slots.`,
       startDate: start,
       endDate: end,
-      metadata: { topicCount: rankedTopics.length, horizon },
+      metadata: {
+        topicCount: rankedTopics.length,
+        horizon,
+        hoursPerDay,
+      },
     })
     .returning();
 
@@ -89,9 +98,7 @@ export async function createAdaptivePlan(params: {
         taskType: day % 3 === 2 ? "practice" : "study",
         status: "pending",
         priority: day < 3 ? "high" : "medium",
-        estimatedMinutes: workspace.dailyStudyHours
-          ? Math.round(workspace.dailyStudyHours * 60)
-          : 25,
+        estimatedMinutes: Math.round(hoursPerDay * 60),
         dueDate: due,
         metadata: { dayOffset: day },
       })
@@ -158,16 +165,39 @@ export async function computeNextBestAction(params: {
   workspaceId: string;
   userId: string;
 }) {
-  const pendingClaims = await db
-    .select()
-    .from(claims)
-    .where(
-      and(
-        eq(claims.workspaceId, params.workspaceId),
-        inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
-      ),
-    )
-    .limit(5);
+  const [pendingClaims, docs, openMistakes, dueTasks] = await Promise.all([
+    db
+      .select()
+      .from(claims)
+      .where(
+        and(
+          eq(claims.workspaceId, params.workspaceId),
+          inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
+        ),
+      )
+      .limit(5),
+    db
+      .select({ id: documents.id, status: documents.status })
+      .from(documents)
+      .where(eq(documents.workspaceId, params.workspaceId)),
+    db
+      .select()
+      .from(mistakeEvents)
+      .where(eq(mistakeEvents.workspaceId, params.workspaceId))
+      .orderBy(desc(mistakeEvents.createdAt))
+      .limit(5),
+    db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, params.workspaceId),
+          eq(tasks.status, "pending"),
+        ),
+      )
+      .orderBy(asc(tasks.dueDate))
+      .limit(20),
+  ]);
 
   if (pendingClaims.length) {
     return {
@@ -175,14 +205,10 @@ export async function computeNextBestAction(params: {
       why: "Unapproved evidence should not drive your plan.",
       priority: "HIGH" as const,
       minutes: 10,
-      href: "inbox",
+      href: "memory",
     };
   }
 
-  const docs = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.workspaceId, params.workspaceId));
   const readyDocs = docs.filter((d) => d.status === "ready").length;
   if (readyDocs === 0) {
     return {
@@ -194,12 +220,6 @@ export async function computeNextBestAction(params: {
     };
   }
 
-  const openMistakes = await db
-    .select()
-    .from(mistakeEvents)
-    .where(eq(mistakeEvents.workspaceId, params.workspaceId))
-    .orderBy(desc(mistakeEvents.createdAt))
-    .limit(5);
   if (openMistakes.length >= 3) {
     return {
       title: "Remediate recent mistakes",
@@ -209,15 +229,6 @@ export async function computeNextBestAction(params: {
       href: "mistakes",
     };
   }
-
-  const dueTasks = await db
-    .select()
-    .from(tasks)
-    .where(
-      and(eq(tasks.workspaceId, params.workspaceId), eq(tasks.status, "pending")),
-    )
-    .orderBy(asc(tasks.dueDate))
-    .limit(20);
 
   const interviewDrills = dueTasks.filter((t) => t.taskType === "interview_drill");
   if (interviewDrills[0]) {
@@ -271,4 +282,111 @@ export async function computeNextBestAction(params: {
     href: "today",
     taskId: dueTasks[0]!.id,
   };
+}
+
+export type PlanIntake = {
+  daysUntilInterview: number;
+  hoursPerDay: number;
+  weakAreas: string[];
+  strongAreas: string[];
+  goals: string;
+};
+
+export async function applyPlanIntake(params: {
+  workspaceId: string;
+  userId: string;
+  intake: PlanIntake;
+}) {
+  const interviewDate = new Date();
+  interviewDate.setHours(12, 0, 0, 0);
+  interviewDate.setDate(
+    interviewDate.getDate() + Math.max(1, Math.min(params.intake.daysUntilInterview, 120)),
+  );
+
+  await db
+    .update(workspaces)
+    .set({
+      interviewDate,
+      dailyStudyHours: params.intake.hoursPerDay,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaces.id, params.workspaceId));
+
+  const [settings] = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, params.workspaceId))
+    .limit(1);
+
+  const nextSettings = {
+    ...(settings?.settings ?? {}),
+    intake: {
+      ...params.intake,
+      completedAt: new Date().toISOString(),
+    },
+  };
+
+  if (settings) {
+    await db
+      .update(workspaceSettings)
+      .set({ settings: nextSettings, updatedAt: new Date() })
+      .where(eq(workspaceSettings.workspaceId, params.workspaceId));
+  } else {
+    await db.insert(workspaceSettings).values({
+      workspaceId: params.workspaceId,
+      maxDailyAiSpendUsd: 5,
+      settings: nextSettings,
+    });
+  }
+
+  // Ensure syllabus exists so we can seed skill states
+  const syllabus = await generateSyllabus({
+    workspaceId: params.workspaceId,
+    userId: params.userId,
+  });
+
+  const weak = new Set(params.intake.weakAreas.map((s) => s.toLowerCase()));
+  const strong = new Set(params.intake.strongAreas.map((s) => s.toLowerCase()));
+
+  for (const topic of syllabus.topics) {
+    const name = topic.name.toLowerCase();
+    let mastery = 0.35;
+    if ([...weak].some((w) => name.includes(w) || w.includes(name))) mastery = 0.15;
+    if ([...strong].some((s) => name.includes(s) || s.includes(name))) mastery = 0.7;
+
+    const existing = await db
+      .select()
+      .from(userSkillStates)
+      .where(
+        and(
+          eq(userSkillStates.workspaceId, params.workspaceId),
+          eq(userSkillStates.topicId, topic.id),
+        ),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      await db
+        .update(userSkillStates)
+        .set({ mastery, updatedAt: new Date() })
+        .where(eq(userSkillStates.id, existing[0].id));
+    } else {
+      await db.insert(userSkillStates).values({
+        workspaceId: params.workspaceId,
+        userId: params.userId,
+        topicId: topic.id,
+        subjectId: topic.subjectId,
+        mastery,
+      });
+    }
+  }
+
+  const plan = await createAdaptivePlan({
+    workspaceId: params.workspaceId,
+    userId: params.userId,
+    days: Math.min(Math.max(params.intake.daysUntilInterview, 7), 21),
+    hoursPerDay: params.intake.hoursPerDay,
+  });
+
+  return { intake: params.intake, interviewDate, ...plan };
 }

@@ -65,7 +65,7 @@ export const workspaceSettings = pgTable("workspace_settings", {
   workspaceId: uuid("workspace_id")
     .primaryKey()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  maxDailyAiSpendUsd: real("max_daily_ai_spend_usd").default(1),
+  maxDailyAiSpendUsd: real("max_daily_ai_spend_usd").default(5),
   maxResearchQueries: integer("max_research_queries").default(20),
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -370,6 +370,10 @@ export const memoryItems = pgTable(
     content: text("content").notNull(),
     status: text("status").notNull().default("USER_APPROVED"),
     version: integer("version").notNull().default(1),
+    sourceKind: text("source_kind").default("claim"),
+    votes: integer("votes").default(0),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    topicId: text("topic_id"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -378,6 +382,27 @@ export const memoryItems = pgTable(
     index("memory_items_workspace_namespace_idx").on(table.workspaceId, table.namespace),
   ],
 );
+
+export const memoryLinks = pgTable(
+  "memory_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    fromMemoryId: uuid("from_memory_id")
+      .notNull()
+      .references(() => memoryItems.id, { onDelete: "cascade" }),
+    toMemoryId: uuid("to_memory_id").references(() => memoryItems.id, {
+      onDelete: "set null",
+    }),
+    linkType: text("link_type").notNull().default("related"),
+    topic: text("topic"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("memory_links_workspace_idx").on(table.workspaceId)],
+);
+
 
 export const memoryVersions = pgTable("memory_versions", {
   id: uuid("id").defaultRandom().primaryKey(),

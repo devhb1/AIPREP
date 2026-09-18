@@ -10,7 +10,7 @@ import {
   startVoiceInterview,
 } from "@/lib/interview/voice";
 import { rateLimit } from "@/lib/rate-limit";
-import { assertWithinDailyBudget } from "@/lib/analytics/usage";
+import { assertWithinVoiceBudget } from "@/lib/analytics/usage";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -26,6 +26,7 @@ const bodySchema = z.object({
   action: z.enum(["start", "persist", "finish"]),
   sessionId: z.string().uuid().optional(),
   judgeMode: z.enum(["easy", "normal", "strict"]).optional(),
+  language: z.enum(["en", "hi", "mix"]).optional(),
   recordingConsent: z.boolean().optional(),
   turns: z
     .array(
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       );
     }
     try {
-      await assertWithinDailyBudget({
+      await assertWithinVoiceBudget({
         workspaceId: parsed.data.workspaceId,
         userId: user.id,
       });
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
         workspaceId: parsed.data.workspaceId,
         userId: user.id,
         judgeMode: parsed.data.judgeMode,
+        language: parsed.data.language,
         recordingConsent: true,
       });
       return NextResponse.json(result);

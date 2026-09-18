@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 type QueryRow = {
   id: string;
@@ -23,28 +23,56 @@ type Campaign = {
   progressLog?: Array<{ at: string; message: string }>;
 };
 
+type DocOption = { id: string; title: string; status: string };
+
 export default function ResearchPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const workspaceId = params.id;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [docs, setDocs] = useState<DocOption[]>([]);
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("quick");
+  const [mode, setMode] = useState<"defaults" | "custom">("defaults");
+  const [userPrompt, setUserPrompt] = useState("");
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch(`/api/research/campaigns?workspaceId=${workspaceId}`);
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Could not load campaigns");
+    const [cRes, dRes] = await Promise.all([
+      fetch(`/api/research/campaigns?workspaceId=${workspaceId}`),
+      fetch(`/api/documents?workspaceId=${workspaceId}`),
+    ]);
+    const cData = await cRes.json();
+    if (!cRes.ok) {
+      setError(cData.error ?? "Could not load campaigns");
       return;
     }
-    setCampaigns(data.campaigns ?? []);
+    setCampaigns(cData.campaigns ?? []);
+    if (dRes.ok) {
+      const dData = await dRes.json();
+      setDocs(
+        (dData.documents ?? []).map((d: DocOption) => ({
+          id: d.id,
+          title: d.title,
+          status: d.status,
+        })),
+      );
+    }
   }
 
   useEffect(() => {
     void load();
   }, [workspaceId]);
+
+  useEffect(() => {
+    const topic = searchParams.get("topic");
+    if (topic) {
+      setMode("custom");
+      setUserPrompt(`Research more on: ${topic}`);
+    }
+  }, [searchParams]);
 
   const running = useMemo(
     () =>
@@ -70,13 +98,27 @@ export default function ResearchPage() {
 
   async function onStart(e: FormEvent) {
     e.preventDefault();
+    if (mode === "custom" && userPrompt.trim().length < 3) {
+      setError("Enter a custom research prompt (at least 3 characters).");
+      return;
+    }
     setStarting(true);
     setError(null);
     try {
       const res = await fetch("/api/research/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, depth }),
+        body: JSON.stringify({
+          workspaceId,
+          depth,
+          useDefaults: mode === "defaults",
+          userPrompt: mode === "custom" ? userPrompt.trim() : undefined,
+          documentIds: selectedDocs,
+          topic:
+            mode === "custom"
+              ? userPrompt.trim().slice(0, 120)
+              : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok && res.status !== 202) {
@@ -92,6 +134,12 @@ export default function ResearchPage() {
     }
   }
 
+  function toggleDoc(id: string) {
+    setSelectedDocs((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
   const live =
     campaigns.find((c) => c.id === activeId) ??
     campaigns.find((c) => c.status === "queued" || c.status === "running");
@@ -104,8 +152,8 @@ export default function ResearchPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Research</h2>
         <p className="mt-2 text-sm text-muted">
-          Findings become candidate claims — they never enter trusted memory until
-          you approve them. Prefer Quick on phone / low budget.
+          Use the KVS default pack or a custom prompt. Optionally ground claims in
+          your PDFs. Findings stay candidates until you approve them in Memory.
         </p>
       </div>
 
@@ -113,6 +161,49 @@ export default function ResearchPage() {
         onSubmit={onStart}
         className="space-y-4 rounded-2xl border border-line bg-panel p-5"
       >
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("defaults")}
+            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
+              mode === "defaults"
+                ? "bg-accent text-white"
+                : "border border-line bg-white"
+            }`}
+          >
+            KVS default pack
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("custom")}
+            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
+              mode === "custom"
+                ? "bg-accent text-white"
+                : "border border-line bg-white"
+            }`}
+          >
+            Custom prompt
+          </button>
+        </div>
+
+        {mode === "custom" ? (
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">What should we research?</span>
+            <textarea
+              value={userPrompt}
+              onChange={(e) => setUserPrompt(e.target.value)}
+              rows={3}
+              placeholder="e.g. Latest KVS PRT document checklist and demo lesson expectations"
+              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm"
+              disabled={starting || Boolean(live)}
+            />
+          </label>
+        ) : (
+          <p className="text-sm text-muted">
+            Runs the curated official / PYQ / panel query pack for KVS PRT prep.
+          </p>
+        )}
+
         <label className="block text-sm">
           <span className="mb-1 block text-muted">Depth</span>
           <select
@@ -121,17 +212,41 @@ export default function ResearchPage() {
             className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
             disabled={starting || Boolean(live)}
           >
-            <option value="quick">Quick (2 queries, cheaper / faster)</option>
+            <option value="quick">Quick (2 queries)</option>
             <option value="standard">Standard (4 queries)</option>
-            <option value="deep">Deep (6 queries — slower)</option>
+            <option value="deep">Deep (6 queries)</option>
           </select>
         </label>
+
+        {docs.length > 0 ? (
+          <div>
+            <p className="mb-2 text-sm text-muted">Ground in PDFs (optional)</p>
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-line bg-white p-3">
+              {docs.map((d) => (
+                <label key={d.id} className="flex min-h-10 items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedDocs.includes(d.id)}
+                    onChange={() => toggleDoc(d.id)}
+                    disabled={starting || Boolean(live)}
+                    className="mt-1"
+                  />
+                  <span>
+                    {d.title}{" "}
+                    <span className="text-xs text-muted">({d.status})</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <button
           type="submit"
           disabled={starting || Boolean(live)}
           className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
         >
-          {live ? "Research running…" : starting ? "Starting…" : "Start research campaign"}
+          {live ? "Research running…" : starting ? "Starting…" : "Start research"}
         </button>
         {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       </form>
@@ -159,40 +274,15 @@ export default function ResearchPage() {
               ))
             )}
           </ol>
-          <ul className="space-y-2 text-sm">
-            {(live.queries ?? []).map((q) => (
-              <li
-                key={q.id}
-                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-line px-3 py-2"
-              >
-                <span className="text-muted">
-                  <span className="font-semibold text-ink">{q.cluster}</span> —{" "}
-                  {q.query.slice(0, 100)}
-                  {q.query.length > 100 ? "…" : ""}
-                </span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-accent">
-                  {q.status}
-                </span>
-              </li>
-            ))}
-          </ul>
         </section>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href={`/workspace/${workspaceId}/inbox`}
-          className="min-h-11 rounded-xl border border-line bg-panel px-4 py-2.5 font-semibold"
-        >
-          Open research inbox
-        </Link>
-        <Link
-          href={`/workspace/${workspaceId}/knowledge`}
-          className="min-h-11 rounded-xl border border-line bg-panel px-4 py-2.5 font-semibold"
-        >
-          Trusted knowledge
-        </Link>
-      </div>
+      <Link
+        href={`/workspace/${workspaceId}/memory?tab=scraped`}
+        className="inline-flex min-h-11 items-center rounded-xl border border-line bg-panel px-4 py-2.5 text-sm font-semibold"
+      >
+        Review claims in Memory →
+      </Link>
 
       <section className="space-y-3">
         {campaigns.map((c) => (

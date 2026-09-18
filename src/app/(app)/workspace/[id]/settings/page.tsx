@@ -9,13 +9,17 @@ type Usage = {
   todayCalls: number;
   weekSpendUsd: number;
   weekCalls: number;
+  todayVoiceSpendUsd?: number;
+  todayVoiceCalls?: number;
   maxDailyAiSpendUsd: number;
+  maxDailyVoiceSpendUsd?: number;
   byFeature: Array<{ feature: string; totalUsd: number; calls: number }>;
 };
 
 type Settings = {
   maxDailyAiSpendUsd: number | null;
   maxResearchQueries: number | null;
+  settings?: { maxDailyVoiceSpendUsd?: number };
 };
 
 type Notification = {
@@ -32,7 +36,8 @@ export default function SettingsPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [dailyCap, setDailyCap] = useState("1");
+  const [dailyCap, setDailyCap] = useState("5");
+  const [voiceCap, setVoiceCap] = useState("3");
   const [researchCap, setResearchCap] = useState("20");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +51,14 @@ export default function SettingsPage() {
     const notif = await notifRes.json();
     setUsage(main.usage ?? null);
     setSettings(main.settings ?? null);
-    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 1));
+    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 5));
+    setVoiceCap(
+      String(
+        main.usage?.maxDailyVoiceSpendUsd ??
+          main.settings?.settings?.maxDailyVoiceSpendUsd ??
+          3,
+      ),
+    );
     setResearchCap(String(main.settings?.maxResearchQueries ?? 20));
     setNotifications(notif.notifications ?? []);
   }
@@ -66,6 +78,7 @@ export default function SettingsPage() {
         workspaceId,
         action: "update_settings",
         maxDailyAiSpendUsd: Number(dailyCap),
+        maxDailyVoiceSpendUsd: Number(voiceCap),
         maxResearchQueries: Number(researchCap),
       }),
     });
@@ -76,6 +89,7 @@ export default function SettingsPage() {
     }
     setMessage("Settings saved.");
     setSettings(data.settings);
+    await load();
   }
 
   async function downloadExport() {
@@ -93,30 +107,32 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6">
+    <main className="mx-auto max-w-4xl space-y-6 pb-24">
       <div>
         <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
           ← Workspace
         </Link>
-        <h2 className="mt-2 text-4xl text-ink">Settings & analytics</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Settings & costs</h2>
         <p className="mt-2 text-sm text-muted">
-          Cost caps, usage, exports, and notifications for production readiness.
+          Daily AI + separate voice budgets, usage dashboard, exports.
         </p>
       </div>
 
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       {message ? <p className="text-sm text-[var(--ok)]">{message}</p> : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {[
-          ["Today $", usage ? usage.todaySpendUsd.toFixed(4) : "—"],
-          ["Today calls", usage ? String(usage.todayCalls) : "—"],
+          ["Today AI $", usage ? usage.todaySpendUsd.toFixed(4) : "—"],
+          ["Today voice $", usage ? (usage.todayVoiceSpendUsd ?? 0).toFixed(4) : "—"],
           ["Week $", usage ? usage.weekSpendUsd.toFixed(4) : "—"],
-          ["Daily cap $", usage ? String(usage.maxDailyAiSpendUsd) : String(settings?.maxDailyAiSpendUsd ?? "—")],
+          ["AI cap $", usage ? String(usage.maxDailyAiSpendUsd) : "—"],
+          ["Voice cap $", usage ? String(usage.maxDailyVoiceSpendUsd ?? 3) : "—"],
+          ["Today calls", usage ? String(usage.todayCalls) : "—"],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
-            <p className="mt-2 text-2xl text-ink">{value}</p>
+            <p className="mt-2 text-xl text-ink sm:text-2xl">{value}</p>
           </div>
         ))}
       </section>
@@ -141,7 +157,7 @@ export default function SettingsPage() {
 
       <form
         onSubmit={saveSettings}
-        className="rounded-2xl border border-line bg-panel p-5 space-y-4"
+        className="space-y-4 rounded-2xl border border-line bg-panel p-5"
       >
         <h3 className="text-xl text-ink">Budget controls</h3>
         <label className="block text-sm">
@@ -152,7 +168,18 @@ export default function SettingsPage() {
             step={0.1}
             value={dailyCap}
             onChange={(e) => setDailyCap(e.target.value)}
-            className="w-full rounded-xl border border-line px-3 py-2"
+            className="min-h-11 w-full rounded-xl border border-line px-3 py-2"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-muted">Max daily voice spend (USD)</span>
+          <input
+            type="number"
+            min={0.1}
+            step={0.1}
+            value={voiceCap}
+            onChange={(e) => setVoiceCap(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-line px-3 py-2"
           />
         </label>
         <label className="block text-sm">
@@ -163,36 +190,36 @@ export default function SettingsPage() {
             step={1}
             value={researchCap}
             onChange={(e) => setResearchCap(e.target.value)}
-            className="w-full rounded-xl border border-line px-3 py-2"
+            className="min-h-11 w-full rounded-xl border border-line px-3 py-2"
           />
         </label>
         <button
           type="submit"
-          className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
+          className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
         >
           Save settings
         </button>
       </form>
 
-      <section className="rounded-2xl border border-line bg-panel p-5 space-y-3">
+      <section className="space-y-3 rounded-2xl border border-line bg-panel p-5">
         <h3 className="text-xl text-ink">Exports</h3>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => void downloadExport()}
-            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold"
+            className="min-h-11 rounded-xl border border-line px-4 py-2 text-sm font-semibold"
           >
             Download JSON export
           </button>
           <a
             href={`/api/settings?workspaceId=${workspaceId}&view=calendar`}
-            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold"
+            className="min-h-11 rounded-xl border border-line px-4 py-2 text-sm font-semibold"
           >
             Download tasks calendar (.ics)
           </a>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-panel p-5 space-y-3">
+      <section className="space-y-3 rounded-2xl border border-line bg-panel p-5">
         <h3 className="text-xl text-ink">Notifications</h3>
         {notifications.length === 0 ? (
           <p className="text-sm text-muted">No notifications yet.</p>

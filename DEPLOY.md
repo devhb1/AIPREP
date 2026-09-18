@@ -9,7 +9,7 @@
   - **Session pooler** `DATABASE_URL` (IPv4)
 - Upstash Redis REST URL + token
 - OpenAI API key with chat, embeddings, web_search, and (optional) Realtime access
-- All migrations applied (`001`–`007`):
+- All migrations applied (`001`–`009`):
 
 ```bash
 npm run db:migrate
@@ -42,7 +42,11 @@ FAST_MODEL
 REASONING_MODEL
 EMBEDDING_MODEL
 VOICE_MODEL
+CRON_SECRET
+JOB_WORKER_SECRET
 ```
+
+Primary region is `bom1` (Mumbai) via `vercel.json`. Cron hits `/api/jobs/worker` every 2 minutes to drain durable jobs if `after()` drops work on cold deploys (Pro cron frequency; Hobby may limit schedule).
 
 5. Deploy.
 
@@ -69,10 +73,11 @@ http://localhost:3000/auth/callback
 
 ## 5. Cost guardrails
 
-- Default daily AI cap: `$1` per workspace (Settings)
+- Default daily AI cap: `$5` per workspace (beta); separate voice cap default `$3`
 - Expensive routes check the cap before calling OpenAI
 - Prefer `quick` research depth on low credits
 - Keep `VOICE_MODEL` on mini realtime unless needed
+- iPhone voice QA matrix: `docs/VOICE_IPHONE_QA.md`
 
 ## 6. Security notes
 

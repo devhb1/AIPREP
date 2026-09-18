@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     workspace,
     settings: settings ?? {
       workspaceId,
-      maxDailyAiSpendUsd: 1,
+      maxDailyAiSpendUsd: 5,
       maxResearchQueries: 20,
       settings: {},
     },
@@ -80,6 +80,7 @@ const bodySchema = z.object({
   workspaceId: z.string().uuid(),
   action: z.enum(["update_settings", "mark_notification_read", "create_notification"]),
   maxDailyAiSpendUsd: z.number().min(0.1).max(50).optional(),
+  maxDailyVoiceSpendUsd: z.number().min(0.1).max(50).optional(),
   maxResearchQueries: z.number().int().min(1).max(100).optional(),
   notificationId: z.string().uuid().optional(),
   title: z.string().optional(),
@@ -106,6 +107,13 @@ export async function POST(request: Request) {
       .where(eq(workspaceSettings.workspaceId, parsed.data.workspaceId))
       .limit(1);
 
+    const nextExtra = {
+      ...((existing[0]?.settings as Record<string, unknown> | null) ?? {}),
+      ...(parsed.data.maxDailyVoiceSpendUsd != null
+        ? { maxDailyVoiceSpendUsd: parsed.data.maxDailyVoiceSpendUsd }
+        : {}),
+    };
+
     if (existing[0]) {
       const [updated] = await db
         .update(workspaceSettings)
@@ -114,6 +122,7 @@ export async function POST(request: Request) {
             parsed.data.maxDailyAiSpendUsd ?? existing[0].maxDailyAiSpendUsd,
           maxResearchQueries:
             parsed.data.maxResearchQueries ?? existing[0].maxResearchQueries,
+          settings: nextExtra,
           updatedAt: new Date(),
         })
         .where(eq(workspaceSettings.workspaceId, parsed.data.workspaceId))
@@ -125,8 +134,9 @@ export async function POST(request: Request) {
       .insert(workspaceSettings)
       .values({
         workspaceId: parsed.data.workspaceId,
-        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? 1,
+        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? 5,
         maxResearchQueries: parsed.data.maxResearchQueries ?? 20,
+        settings: nextExtra,
       })
       .returning();
     return NextResponse.json({ settings: created });

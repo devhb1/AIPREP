@@ -1,24 +1,31 @@
-import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { chatMessages, chatThreads, workspaces } from "@/lib/db/schema";
 import { requireUser, ensureProfile } from "@/lib/auth/session";
 import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
-import { chatCompletion } from "@/lib/ai/responses";
+import { streamChatCompletion } from "@/lib/ai/responses";
 import { rateLimit } from "@/lib/rate-limit";
 import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 import { mentorSystem } from "@prompts";
+
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   workspaceId: z.string().uuid(),
   message: z.string().min(1).max(4000),
   threadId: z.string().uuid().optional(),
+  stream: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   await ensureProfile(user);
 
   const limited = await rateLimit({
@@ -27,12 +34,18 @@ export async function POST(request: Request) {
     windowSeconds: 60 * 60,
   });
   if (!limited.allowed) {
-    return NextResponse.json({ error: "Chat rate limit exceeded" }, { status: 429 });
+    return new Response(JSON.stringify({ error: "Chat rate limit exceeded" }), {
+      status: 429,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const { workspaceId, message, threadId } = parsed.data;
@@ -40,9 +53,11 @@ export async function POST(request: Request) {
   try {
     await assertWithinDailyBudget({ workspaceId, userId: user.id });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Budget exceeded" },
-      { status: 429 },
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Budget exceeded",
+      }),
+      { status: 429, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -52,7 +67,10 @@ export async function POST(request: Request) {
     .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, user.id)))
     .limit(1);
   if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+    return new Response(JSON.stringify({ error: "Workspace not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   let thread =
@@ -121,15 +139,6 @@ ${message}
 SOURCE EXCERPTS:
 ${contextBlock}`;
 
-  const result = await chatCompletion({
-    system,
-    user: userPrompt,
-    userId: user.id,
-    workspaceId,
-    feature: "mentor_chat",
-    useCache: false,
-  });
-
   const citations = chunks.map((c, i) => ({
     index: i + 1,
     kind: c.kind,
@@ -141,19 +150,60 @@ ${contextBlock}`;
     distance: c.distance,
   }));
 
-  const [assistantMessage] = await db
-    .insert(chatMessages)
-    .values({
-      threadId: thread.id,
-      role: "assistant",
-      content: result.content,
-      citations,
-    })
-    .returning();
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
+      };
 
-  return NextResponse.json({
-    threadId: thread.id,
-    message: assistantMessage,
-    citations,
+      try {
+        send("meta", { threadId: thread!.id, citations });
+        let full = "";
+        await streamChatCompletion({
+          system,
+          user: userPrompt,
+          userId: user.id,
+          workspaceId,
+          feature: "mentor_chat",
+          onToken: (token) => {
+            full += token;
+            send("token", { token });
+          },
+        });
+
+        const [assistantMessage] = await db
+          .insert(chatMessages)
+          .values({
+            threadId: thread!.id,
+            role: "assistant",
+            content: full.trim(),
+            citations,
+          })
+          .returning();
+
+        send("done", {
+          threadId: thread!.id,
+          message: assistantMessage,
+          citations,
+        });
+      } catch (error) {
+        send("error", {
+          error: error instanceof Error ? error.message : "Chat failed",
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
   });
 }

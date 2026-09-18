@@ -2,17 +2,25 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  InterviewScorecard,
+  type ScorecardReport,
+} from "@/components/interview-scorecard";
 
 type Turn = { role: "interviewer" | "candidate"; content: string };
+type InterviewLanguage = "en" | "hi" | "mix";
 
-const FILLER_RE = /\b(um+|uh+|erm+|like|you know)\b/gi;
+const FILLER_RE = /\b(um+|uh+|erm+|like|you know|अं+|आ+|मतलब)\b/gi;
 
 export default function LiveVoiceInterviewPage() {
   const params = useParams<{ id: string }>();
   const workspaceId = params.id;
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [judgeMode, setJudgeMode] = useState<"easy" | "normal" | "strict">("normal");
+  const [language, setLanguage] = useState<InterviewLanguage>("en");
   const [consent, setConsent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -20,9 +28,10 @@ export default function LiveVoiceInterviewPage() {
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const [report, setReport] = useState<ScorecardReport | null>(null);
   const [muted, setMuted] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -30,6 +39,13 @@ export default function LiveVoiceInterviewPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const turnsRef = useRef<Turn[]>([]);
+
+  useEffect(() => {
+    const lang = searchParams.get("lang");
+    if (lang === "en" || lang === "hi" || lang === "mix") setLanguage(lang);
+    const mode = searchParams.get("mode");
+    if (mode === "easy" || mode === "normal" || mode === "strict") setJudgeMode(mode);
+  }, [searchParams]);
 
   useEffect(() => {
     turnsRef.current = turns;
@@ -55,13 +71,15 @@ export default function LiveVoiceInterviewPage() {
     const joined = candidateTexts.join(" ");
     const fillerCount = (joined.match(FILLER_RE) ?? []).length;
     return {
+      language,
+      judgeMode,
       fillerCount,
       candidateTurns: candidateTexts.length,
       interviewerTurns: turns.filter((t) => t.role === "interviewer").length,
       totalCandidateChars: joined.length,
       elapsedSec,
     };
-  }, [turns, elapsedSec]);
+  }, [turns, elapsedSec, language, judgeMode]);
 
   function cleanupMedia() {
     dcRef.current?.close();
@@ -93,6 +111,13 @@ export default function LiveVoiceInterviewPage() {
         transcript?: string;
         delta?: string;
       };
+
+      if (event.type === "input_audio_buffer.speech_started") {
+        setSpeaking(true);
+      }
+      if (event.type === "input_audio_buffer.speech_stopped") {
+        setSpeaking(false);
+      }
 
       if (
         event.type === "conversation.item.input_audio_transcription.completed" &&
@@ -131,12 +156,17 @@ export default function LiveVoiceInterviewPage() {
           workspaceId,
           action: "start",
           judgeMode,
+          language,
           recordingConsent: true,
         }),
       });
       const bootData = await boot.json();
       if (!boot.ok) {
-        throw new Error(bootData.error ?? "Failed to start voice session");
+        throw new Error(
+          typeof bootData.error === "string"
+            ? bootData.error
+            : "Failed to start voice session",
+        );
       }
 
       setSessionId(bootData.session.id);
@@ -149,14 +179,22 @@ export default function LiveVoiceInterviewPage() {
       if (!audioRef.current) {
         audioRef.current = new Audio();
         audioRef.current.autoplay = true;
+        // iOS: unlock audio playback after user gesture
+        void audioRef.current.play().catch(() => undefined);
       }
       pc.ontrack = (event) => {
         if (audioRef.current) {
           audioRef.current.srcObject = event.streams[0] ?? null;
+          void audioRef.current.play().catch(() => undefined);
         }
       };
 
-      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
       localStreamRef.current = localStream;
       localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
@@ -191,7 +229,17 @@ export default function LiveVoiceInterviewPage() {
     } catch (err) {
       cleanupMedia();
       setStatus("idle");
-      setError(err instanceof Error ? err.message : "Could not start voice interview");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Could not start voice interview. Check mic permission and HTTPS.";
+      if (/NotAllowedError|Permission denied/i.test(message)) {
+        setError("Microphone blocked. Allow mic in Safari settings, then tap Start again.");
+      } else if (/getUserMedia|NotFoundError/i.test(message)) {
+        setError("No microphone found. Connect a mic and try again.");
+      } else {
+        setError(message);
+      }
     }
   }
 
@@ -226,7 +274,13 @@ export default function LiveVoiceInterviewPage() {
       }
       setReport(data.report ?? null);
       setStatus("done");
+      const finishedId = sessionId;
       setSessionId(null);
+      if (finishedId) {
+        router.push(
+          `/workspace/${workspaceId}/interview/scorecard?sessionId=${finishedId}`,
+        );
+      }
     } catch (err) {
       setStatus("idle");
       setError(err instanceof Error ? err.message : "Finalize failed");
@@ -235,142 +289,174 @@ export default function LiveVoiceInterviewPage() {
 
   const mm = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
   const ss = String(elapsedSec % 60).padStart(2, "0");
+  const isLive = status === "live" || status === "ending";
+
+  if (isLive) {
+    return (
+      <main className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+              Live · {language === "hi" ? "Hindi" : language === "mix" ? "Mix" : "EN"}
+            </p>
+            <p className="text-lg font-semibold text-ink">
+              {mm}:{ss}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={toggleMute}
+              disabled={status === "ending"}
+              className="min-h-11 min-w-11 rounded-xl border border-line px-3 text-sm font-semibold disabled:opacity-60"
+            >
+              {muted ? "Unmute" : "Mute"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void endVoice()}
+              disabled={status === "ending"}
+              className="min-h-11 rounded-xl bg-[var(--danger)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {status === "ending" ? "Ending…" : "End"}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+          <div
+            className={`flex h-36 w-36 items-center justify-center rounded-full border-4 transition-all ${
+              speaking
+                ? "scale-110 border-accent bg-accent-soft shadow-[0_0_40px_rgba(0,0,0,0.08)]"
+                : "border-line bg-panel"
+            }`}
+          >
+            <span className="text-sm font-semibold text-muted">
+              {speaking ? "Listening…" : muted ? "Muted" : "Ready"}
+            </span>
+          </div>
+          {error ? <p className="text-center text-sm text-[var(--danger)]">{error}</p> : null}
+        </div>
+
+        <div className="max-h-[40vh] overflow-y-auto border-t border-line bg-panel px-4 py-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Transcript
+          </p>
+          {turns.length === 0 ? (
+            <p className="text-sm text-muted">Speak after the panel asks a question.</p>
+          ) : (
+            <div className="space-y-2">
+              {turns.slice(-8).map((turn, idx) => (
+                <div key={`${turn.role}-${idx}`} className="text-sm">
+                  <span className="font-semibold text-muted">
+                    {turn.role === "candidate" ? "You" : "Panel"}:{" "}
+                  </span>
+                  <span className="text-ink">{turn.content}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6">
+    <main className="mx-auto max-w-4xl space-y-6 pb-24">
       <div>
         <Link href={`/workspace/${workspaceId}/interview`} className="text-sm text-accent">
-          ← Interview
+          ← Interview hub
         </Link>
-        <h2 className="mt-2 text-4xl text-ink">Live voice interview</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Live voice interview</h2>
         <p className="mt-2 text-sm text-muted">
-          Realtime OpenAI voice session with live transcript. API keys stay on the
-          server; the browser uses an ephemeral token.
+          Tap Start with mic allowed. On iPhone, stay on this tab — backgrounding may
+          drop the session.
         </p>
       </div>
 
-      {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+      {error ? (
+        <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
 
-      <section className="rounded-2xl border border-line bg-panel p-5 space-y-4">
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted">Judge mode</span>
-          <select
-            value={judgeMode}
-            disabled={status === "live" || status === "connecting"}
-            onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-            className="rounded-xl border border-line bg-white px-3 py-2"
-          >
-            <option value="easy">Easy</option>
-            <option value="normal">Normal</option>
-            <option value="strict">Strict</option>
-          </select>
-        </label>
+      {report ? (
+        <InterviewScorecard
+          report={report}
+          mode="voice"
+          language={language}
+          judgeMode={judgeMode}
+          speech={{
+            fillerCount: metrics.fillerCount,
+            elapsedSec,
+            candidateTurns: metrics.candidateTurns,
+          }}
+          onClose={() => setReport(null)}
+        />
+      ) : null}
 
-        <label className="flex items-start gap-3 text-sm">
+      <section className="space-y-4 rounded-2xl border border-line bg-panel p-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">Language</span>
+            <select
+              value={language}
+              disabled={status === "connecting"}
+              onChange={(e) => setLanguage(e.target.value as InterviewLanguage)}
+              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            >
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="mix">Mix (Hinglish)</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">Judge mode</span>
+            <select
+              value={judgeMode}
+              disabled={status === "connecting"}
+              onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
+              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            >
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="strict">Strict</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="flex min-h-11 items-start gap-3 text-sm">
           <input
             type="checkbox"
             checked={consent}
-            disabled={status === "live" || status === "connecting"}
+            disabled={status === "connecting"}
             onChange={(e) => setConsent(e.target.checked)}
             className="mt-1"
           />
           <span>
-            I consent to microphone capture and transcript storage for coaching
-            feedback. Audio is processed by OpenAI Realtime for this session.
+            I consent to microphone capture and transcript storage for coaching.
+            Audio is processed by OpenAI Realtime for this session.
           </span>
         </label>
 
-        <div className="flex flex-wrap gap-2">
-          {status === "idle" || status === "done" ? (
-            <button
-              onClick={() => void startVoice()}
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
-            >
-              Start voice interview
-            </button>
-          ) : null}
-          {status === "connecting" ? (
-            <button
-              disabled
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white opacity-60"
-            >
-              Connecting…
-            </button>
-          ) : null}
-          {status === "live" || status === "ending" ? (
-            <>
-              <button
-                onClick={toggleMute}
-                disabled={status === "ending"}
-                className="rounded-xl border border-line px-4 py-2 text-sm font-semibold disabled:opacity-60"
-              >
-                {muted ? "Unmute" : "Mute"}
-              </button>
-              <button
-                onClick={() => void endVoice()}
-                disabled={status === "ending"}
-                className="rounded-xl border border-line px-4 py-2 text-sm font-semibold disabled:opacity-60"
-              >
-                {status === "ending" ? "Ending…" : "End interview"}
-              </button>
-            </>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-4 text-sm text-muted">
-          <span>Status: {status}</span>
-          <span>
-            Timer: {mm}:{ss}
-          </span>
-          <span>Fillers (approx): {metrics.fillerCount}</span>
-          <span>Candidate turns: {metrics.candidateTurns}</span>
-        </div>
+        {status === "idle" || status === "done" ? (
+          <button
+            type="button"
+            onClick={() => void startVoice()}
+            className="min-h-12 w-full rounded-xl bg-accent px-4 py-3 text-base font-semibold text-white sm:w-auto"
+          >
+            Start voice interview
+          </button>
+        ) : null}
+        {status === "connecting" ? (
+          <button
+            disabled
+            className="min-h-12 w-full rounded-xl bg-accent px-4 py-3 text-base font-semibold text-white opacity-60 sm:w-auto"
+          >
+            Connecting mic…
+          </button>
+        ) : null}
       </section>
-
-      <section className="rounded-2xl border border-line bg-panel p-5 space-y-3">
-        <h3 className="text-xl text-ink">Live transcript</h3>
-        {turns.length === 0 ? (
-          <p className="text-sm text-muted">Transcript appears as you and the panel speak.</p>
-        ) : (
-          turns.map((turn, idx) => (
-            <div
-              key={`${turn.role}-${idx}`}
-              className={
-                turn.role === "candidate"
-                  ? "ml-6 rounded-xl bg-accent-soft px-4 py-3 text-sm"
-                  : "mr-6 rounded-xl border border-line bg-white px-4 py-3 text-sm"
-              }
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                {turn.role === "candidate" ? "You" : "Panel"}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-ink">{turn.content}</p>
-            </div>
-          ))
-        )}
-      </section>
-
-      {report ? (
-        <section className="rounded-2xl border border-line bg-panel p-5 space-y-3 text-sm">
-          <h3 className="text-xl text-ink">Voice mock report</h3>
-          <p className="text-muted">
-            Overall score: {String(report.overallScore ?? "—")} / 10
-          </p>
-          <p className="text-ink">{String(report.summary ?? "")}</p>
-          <div>
-            <p className="font-semibold">Speech snapshot</p>
-            <p className="text-muted">
-              Fillers ≈ {metrics.fillerCount}, candidate chars {metrics.totalCandidateChars},
-              duration {mm}:{ss}
-            </p>
-          </div>
-          <ul className="list-disc pl-5 text-muted">
-            {((report.drills as string[]) ?? []).map((d) => (
-              <li key={d}>{d}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </main>
   );
 }

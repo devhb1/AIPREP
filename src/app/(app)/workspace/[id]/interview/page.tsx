@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import {
+  InterviewScorecard,
+  type ScorecardReport,
+} from "@/components/interview-scorecard";
 
 type Session = {
   id: string;
   judgeMode: string;
   status: string;
+  mode?: string;
   overallScore: number | null;
   summary: string | null;
   createdAt: string;
+  speechMetrics?: { language?: string };
 };
 
 type Turn = {
@@ -30,9 +36,13 @@ type LibraryItem = {
 };
 type Story = { id: string; title: string; content: string };
 
+type InterviewLanguage = "en" | "hi" | "mix";
+
 export default function InterviewPage() {
   const params = useParams<{ id: string }>();
   const workspaceId = params.id;
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [checklist, setChecklist] = useState<{ id: string; items: ChecklistItem[] } | null>(
@@ -41,35 +51,58 @@ export default function InterviewPage() {
   const [library, setLibrary] = useState<LibraryItem[]>([]);
   const [stories, setStories] = useState<Story[]>([]);
   const [judgeMode, setJudgeMode] = useState<"easy" | "normal" | "strict">("normal");
+  const [language, setLanguage] = useState<InterviewLanguage>("en");
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [answer, setAnswer] = useState("");
-  const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const [report, setReport] = useState<ScorecardReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyContent, setStoryContent] = useState("");
+  const [showTextMock, setShowTextMock] = useState(false);
 
   async function loadMeta() {
-    const [sRes, cRes, lRes, stRes] = await Promise.all([
-      fetch(`/api/interview?workspaceId=${workspaceId}`),
-      fetch(`/api/interview?workspaceId=${workspaceId}&view=checklist`),
-      fetch(`/api/interview?workspaceId=${workspaceId}&view=library`),
-      fetch(`/api/interview?workspaceId=${workspaceId}&view=stories`),
-    ]);
-    const sData = await sRes.json();
-    const cData = await cRes.json();
-    const lData = await lRes.json();
-    const stData = await stRes.json();
-    setSessions(sData.sessions ?? []);
-    setChecklist(cData.checklist ?? null);
-    setLibrary(lData.library ?? []);
-    setStories(stData.stories ?? []);
+    setMetaLoading(true);
+    try {
+      const [sRes, cRes, lRes, stRes] = await Promise.all([
+        fetch(`/api/interview?workspaceId=${workspaceId}`),
+        fetch(`/api/interview?workspaceId=${workspaceId}&view=checklist`),
+        fetch(`/api/interview?workspaceId=${workspaceId}&view=library`),
+        fetch(`/api/interview?workspaceId=${workspaceId}&view=stories`),
+      ]);
+      const sData = await sRes.json();
+      const cData = await cRes.json();
+      const lData = await lRes.json();
+      const stData = await stRes.json();
+      setSessions(sData.sessions ?? []);
+      setChecklist(cData.checklist ?? null);
+      setLibrary(lData.library ?? []);
+      setStories(stData.stories ?? []);
+    } finally {
+      setMetaLoading(false);
+    }
   }
 
   useEffect(() => {
     void loadMeta();
   }, [workspaceId]);
+
+  useEffect(() => {
+    const lang = searchParams.get("lang");
+    if (lang === "en" || lang === "hi" || lang === "mix") setLanguage(lang);
+    const mode = searchParams.get("mode");
+    if (mode === "easy" || mode === "normal" || mode === "strict") setJudgeMode(mode);
+  }, [searchParams]);
+
+  function startLive() {
+    const q = new URLSearchParams({
+      lang: language,
+      mode: judgeMode,
+    });
+    router.push(`/workspace/${workspaceId}/interview/live?${q.toString()}`);
+  }
 
   async function startMock() {
     setLoading(true);
@@ -214,153 +247,175 @@ export default function InterviewPage() {
         <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
           ← Workspace
         </Link>
-        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Interview coach</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Interview hub</h2>
         <p className="mt-2 text-sm text-muted">
-          Practice answers in text (fast). After each mock we score you, save
-          improved answers, and queue drills. Use voice for spoken practice.
+          Voice-first KVS PRT mocks in English, Hindi, or Hinglish — then a real
+          scorecard.
         </p>
       </div>
 
-      <Link
-        href={`/workspace/${workspaceId}/interview/live`}
-        className="block rounded-2xl border border-accent/40 bg-accent-soft/50 p-4"
-      >
-        <p className="text-sm font-semibold text-accent">Live voice interview</p>
-        <p className="mt-1 text-sm text-muted">
-          Talk with the panel on mic → transcript → evaluate. Needs Safari mic
-          permission + HTTPS. Tap to open.
-        </p>
-      </Link>
-
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
-      <section className="space-y-4 rounded-2xl border border-line bg-panel p-5">
-        <h3 className="text-xl text-ink">Text mock interview</h3>
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted">Judge mode</span>
-          <select
-            value={judgeMode}
-            onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-            className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2 sm:w-auto"
-            disabled={Boolean(activeSessionId) || loading}
-          >
-            <option value="easy">Easy</option>
-            <option value="normal">Normal</option>
-            <option value="strict">Strict</option>
-          </select>
-        </label>
-        {!activeSessionId ? (
-          <button
-            onClick={() => void startMock()}
-            disabled={loading}
-            className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
-          >
-            {loading ? "Starting…" : "Start text mock"}
-          </button>
-        ) : (
-          <button
-            onClick={() => void endMock()}
-            disabled={loading}
-            className="min-h-11 w-full rounded-xl border border-line px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:w-auto"
-          >
-            {loading ? "Evaluating…" : "End & evaluate"}
-          </button>
-        )}
+      <section className="space-y-5 rounded-2xl border border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel p-5 sm:p-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+            Primary
+          </p>
+          <h3 className="mt-2 text-2xl text-ink">Start live interview</h3>
+          <p className="mt-1 text-sm text-muted">
+            Mic + Realtime panel. Choose language, then tap start on the next
+            screen (iOS needs a user gesture for mic).
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">Language</span>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as InterviewLanguage)}
+              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            >
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="mix">Mix (Hinglish)</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted">Judge mode</span>
+            <select
+              value={judgeMode}
+              onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
+              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            >
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="strict">Strict</option>
+            </select>
+          </label>
+        </div>
+
+        <button
+          type="button"
+          onClick={startLive}
+          className="min-h-12 w-full rounded-xl bg-accent px-4 py-3 text-base font-semibold text-white sm:w-auto"
+        >
+          Start live interview →
+        </button>
       </section>
 
-      {activeSessionId ? (
-        <section className="space-y-4">
-          <div className="space-y-3 rounded-2xl border border-line bg-panel p-5">
-            {turns.map((turn, idx) => (
-              <div
-                key={`${turn.id}-${idx}`}
-                className={
-                  turn.role === "candidate"
-                    ? "ml-6 rounded-xl bg-accent-soft px-4 py-3 text-sm"
-                    : "mr-6 rounded-xl border border-line bg-white px-4 py-3 text-sm"
-                }
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                  {turn.role}
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-ink">{turn.content}</p>
-                {turn.feedback ? (
-                  <p className="mt-2 text-xs text-muted">
-                    Score: {turn.score ?? "—"} · {turn.feedback}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-          <form onSubmit={sendAnswer} className="flex flex-col gap-2 sm:flex-row">
-            <textarea
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              rows={3}
-              placeholder="Answer as you would in the interview…"
-              className="min-h-24 flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-sm outline-none ring-accent focus:ring-2"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !answer.trim()}
-              className="min-h-11 self-stretch rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 sm:self-end"
-            >
-              {loading ? "Thinking…" : "Send"}
-            </button>
-          </form>
-        </section>
+      {report ? (
+        <InterviewScorecard
+          report={report}
+          mode="text"
+          judgeMode={judgeMode}
+          onClose={() => setReport(null)}
+        />
       ) : null}
 
-      {report ? (
-        <section className="rounded-2xl border border-line bg-panel p-5 space-y-3 text-sm">
-          <h3 className="text-xl text-ink">Mock report</h3>
-          <p className="text-muted">
-            Overall score: {String(report.overallScore ?? "—")} / 10
-          </p>
-          <p className="text-ink">{String(report.summary ?? "")}</p>
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <button
+          type="button"
+          onClick={() => setShowTextMock((v) => !v)}
+          className="flex w-full items-center justify-between text-left"
+        >
           <div>
-            <p className="font-semibold">Strengths</p>
-            <ul className="list-disc pl-5 text-muted">
-              {((report.strengths as string[]) ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
+            <h3 className="text-lg text-ink">Text mock (secondary)</h3>
+            <p className="text-sm text-muted">Silent practice when you cannot use the mic.</p>
           </div>
-          <div>
-            <p className="font-semibold">Weaknesses</p>
-            <ul className="list-disc pl-5 text-muted">
-              {((report.weaknesses as string[]) ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
+          <span className="text-accent">{showTextMock ? "Hide" : "Show"}</span>
+        </button>
+
+        {showTextMock ? (
+          <div className="mt-4 space-y-4 border-t border-line pt-4">
+            {!activeSessionId ? (
+              <button
+                onClick={() => void startMock()}
+                disabled={loading}
+                className="min-h-11 w-full rounded-xl border border-line px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:w-auto"
+              >
+                {loading ? "Starting…" : "Start text mock"}
+              </button>
+            ) : (
+              <button
+                onClick={() => void endMock()}
+                disabled={loading}
+                className="min-h-11 w-full rounded-xl border border-line px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:w-auto"
+              >
+                {loading ? "Evaluating…" : "End & scorecard"}
+              </button>
+            )}
+
+            {activeSessionId ? (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {turns.map((turn, idx) => (
+                    <div
+                      key={`${turn.id}-${idx}`}
+                      className={
+                        turn.role === "candidate"
+                          ? "ml-4 rounded-xl bg-accent-soft px-4 py-3 text-sm sm:ml-6"
+                          : "mr-4 rounded-xl border border-line bg-white px-4 py-3 text-sm sm:mr-6"
+                      }
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                        {turn.role}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-ink">{turn.content}</p>
+                      {turn.feedback ? (
+                        <p className="mt-2 text-xs text-muted">
+                          Score: {turn.score ?? "—"} · {turn.feedback}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={sendAnswer} className="flex flex-col gap-2 sm:flex-row">
+                  <textarea
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    rows={3}
+                    placeholder="Answer as you would in the interview…"
+                    className="min-h-24 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm"
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !answer.trim()}
+                    className="min-h-11 self-stretch rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 sm:self-end"
+                  >
+                    {loading ? "Thinking…" : "Send"}
+                  </button>
+                </form>
+              </div>
+            ) : null}
           </div>
-          <div>
-            <p className="font-semibold">Drills queued</p>
-            <ul className="list-disc pl-5 text-muted">
-              {((report.drills as string[]) ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
+        ) : null}
+      </section>
 
       <section className="rounded-2xl border border-line bg-panel p-5 space-y-3">
         <h3 className="text-xl text-ink">Interview-day checklist</h3>
-        {(checklist?.items ?? []).map((item) => (
-          <label key={item.id} className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={item.done}
-              onChange={() => void toggleItem(item.id)}
-              className="mt-1"
-            />
-            <span className={item.done ? "text-muted line-through" : "text-ink"}>
-              {item.label}
-            </span>
-          </label>
-        ))}
+        {metaLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-8 animate-pulse rounded-lg bg-[var(--background)]" />
+            ))}
+          </div>
+        ) : (
+          (checklist?.items ?? []).map((item) => (
+            <label key={item.id} className="flex min-h-11 items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={() => void toggleItem(item.id)}
+                className="mt-1"
+              />
+              <span className={item.done ? "text-muted line-through" : "text-ink"}>
+                {item.label}
+              </span>
+            </label>
+          ))
+        )}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -388,7 +443,7 @@ export default function InterviewPage() {
               value={storyTitle}
               onChange={(e) => setStoryTitle(e.target.value)}
               placeholder="Story title"
-              className="w-full rounded-xl border border-line px-3 py-2 text-sm"
+              className="min-h-11 w-full rounded-xl border border-line px-3 py-2 text-sm"
             />
             <textarea
               value={storyContent}
@@ -399,7 +454,7 @@ export default function InterviewPage() {
             />
             <button
               type="submit"
-              className="rounded-xl border border-line px-3 py-1.5 text-sm font-semibold"
+              className="min-h-11 rounded-xl border border-line px-3 py-2 text-sm font-semibold"
             >
               Save story
             </button>
@@ -416,20 +471,24 @@ export default function InterviewPage() {
       <section className="space-y-3">
         <h3 className="text-xl text-ink">Past sessions</h3>
         {sessions.map((s) => (
-          <div
+          <Link
             key={s.id}
-            className="rounded-2xl border border-line bg-panel p-4 text-sm flex flex-wrap justify-between gap-2"
+            href={`/workspace/${workspaceId}/interview/scorecard?sessionId=${s.id}`}
+            className="flex flex-wrap justify-between gap-2 rounded-2xl border border-line bg-panel p-4 text-sm"
           >
             <div>
               <p className="font-medium text-ink">
-                {s.judgeMode} · {s.status}
+                {s.mode === "voice" ? "Voice" : "Text"} · {s.judgeMode} · {s.status}
+                {s.speechMetrics?.language
+                  ? ` · ${s.speechMetrics.language}`
+                  : ""}
               </p>
               <p className="text-muted">{s.summary ?? "No summary yet"}</p>
             </div>
-            <span className="text-accent font-semibold">
+            <span className="font-semibold text-accent">
               {s.overallScore != null ? `${s.overallScore}/10` : "—"}
             </span>
-          </div>
+          </Link>
         ))}
       </section>
     </main>

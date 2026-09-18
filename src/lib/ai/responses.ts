@@ -59,3 +59,49 @@ export async function chatCompletion(params: {
 
   return { content, cached: false, inputTokens, outputTokens };
 }
+
+/** Stream chat tokens; caller persists final content. */
+export async function streamChatCompletion(params: {
+  system: string;
+  user: string;
+  model?: string;
+  userId?: string | null;
+  workspaceId?: string | null;
+  feature?: string;
+  temperature?: number;
+  onToken: (token: string) => void;
+}) {
+  const model = params.model ?? MODELS.fast;
+  const openai = getOpenAI();
+  const stream = await openai.chat.completions.create({
+    model,
+    temperature: params.temperature ?? 0.2,
+    stream: true,
+    messages: [
+      { role: "system", content: params.system },
+      { role: "user", content: params.user },
+    ],
+  });
+
+  let content = "";
+  for await (const chunk of stream) {
+    const token = chunk.choices[0]?.delta?.content ?? "";
+    if (token) {
+      content += token;
+      params.onToken(token);
+    }
+  }
+
+  await logAiUsage({
+    userId: params.userId,
+    workspaceId: params.workspaceId,
+    feature: params.feature ?? "chat",
+    model,
+    inputTokens: Math.ceil((params.system.length + params.user.length) / 4),
+    outputTokens: Math.ceil(content.length / 4),
+    cached: false,
+    metadata: { streamed: true },
+  });
+
+  return { content: content.trim(), cached: false };
+}

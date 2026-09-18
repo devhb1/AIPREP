@@ -57,6 +57,9 @@ export async function approveClaim(params: {
         confidence: claim.confidence,
         assessment: claim.assessment,
       },
+      sourceKind: "claim",
+      topicId: claim.topic ?? null,
+      votes: 0,
     })
     .returning();
 

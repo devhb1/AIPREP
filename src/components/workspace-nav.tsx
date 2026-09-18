@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { path: "", label: "Home", match: "exact" as const },
-  { path: "documents", label: "Docs" },
-  { path: "research", label: "Research" },
-  { path: "chat", label: "Chat" },
+  { path: "memory", label: "Memory" },
   { path: "interview", label: "Interview" },
-  { path: "today", label: "Today" },
+  { path: "chat", label: "Chat" },
+  { path: "research", label: "Research" },
 ];
 
 export function WorkspaceMobileNav({ workspaceId }: { workspaceId: string }) {
@@ -29,7 +28,7 @@ export function WorkspaceMobileNav({ workspaceId }: { workspaceId: string }) {
             <li key={link.path || "home"} className="flex-1">
               <Link
                 href={href}
-                className={`flex min-h-12 flex-col items-center justify-center px-1 text-[11px] font-semibold ${
+                className={`flex min-h-14 flex-col items-center justify-center px-1 text-[11px] font-semibold ${
                   active ? "text-accent" : "text-muted"
                 }`}
               >
@@ -45,15 +44,13 @@ export function WorkspaceMobileNav({ workspaceId }: { workspaceId: string }) {
 
 export function WorkspaceChipNav({ workspaceId }: { workspaceId: string }) {
   const chips = [
+    ["memory", "Memory"],
     ["documents", "Documents"],
     ["research", "Research"],
-    ["inbox", "Inbox"],
-    ["knowledge", "Knowledge"],
     ["plan", "Plan"],
     ["today", "Today"],
     ["practice", "Practice"],
     ["interview", "Interview"],
-    ["interview/live", "Voice"],
     ["settings", "Settings"],
     ["chat", "Mentor chat"],
   ] as const;
@@ -65,9 +62,9 @@ export function WorkspaceChipNav({ workspaceId }: { workspaceId: string }) {
           key={path}
           href={`/workspace/${workspaceId}/${path}`}
           className={
-            path === "chat"
-              ? "min-h-10 shrink-0 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
-              : "min-h-10 shrink-0 rounded-xl border border-line bg-panel px-4 py-2 text-sm font-semibold"
+            path === "interview" || path === "memory"
+              ? "min-h-11 shrink-0 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white"
+              : "min-h-11 shrink-0 rounded-xl border border-line bg-panel px-4 py-2.5 text-sm font-semibold"
           }
         >
           {label}

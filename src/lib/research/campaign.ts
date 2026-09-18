@@ -15,6 +15,7 @@ import { chatCompletion } from "@/lib/ai/responses";
 import { webResearch } from "@/lib/ai/web-search";
 import { MODELS } from "@/lib/ai/models";
 import { claimExtractionSystem } from "@prompts";
+import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
 
 const claimSchema = z.object({
   claims: z.array(
@@ -29,7 +30,23 @@ const claimSchema = z.object({
   ),
 });
 
-export function buildKvsResearchQueries(topic: string) {
+export function buildKvsResearchQueries(topic: string, userPrompt?: string) {
+  if (userPrompt?.trim()) {
+    return [
+      {
+        cluster: "custom",
+        query: userPrompt.trim(),
+      },
+      {
+        cluster: "custom",
+        query: `${userPrompt.trim()} KVS PRT interview official guidance`,
+      },
+      {
+        cluster: "custom",
+        query: `${topic} ${userPrompt.trim()}`.slice(0, 280),
+      },
+    ];
+  }
   return [
     {
       cluster: "official",
@@ -58,6 +75,27 @@ export function buildKvsResearchQueries(topic: string) {
   ];
 }
 
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await fn(items[i]!, i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () =>
+    worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function runResearchCampaign(campaignId: string) {
   const [campaign] = await db
     .select()
@@ -65,6 +103,12 @@ export async function runResearchCampaign(campaignId: string) {
     .where(eq(researchCampaigns.id, campaignId))
     .limit(1);
   if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status === "completed") {
+    return { claimCount: 0, summary: campaign.summary ?? "Already completed", skipped: true };
+  }
+  if (campaign.status === "running") {
+    // Another worker may own it; allow stale resume only via job runner requeue
+  }
 
   const [workspace] = await db
     .select()
@@ -105,12 +149,66 @@ export async function runResearchCampaign(campaignId: string) {
 
     const notes: string[] = [];
     const urlToSourceId = new Map<string, string>();
+    const meta = (campaign.metadata as Record<string, unknown> | null) ?? {};
+    const userPrompt =
+      typeof meta.userPrompt === "string" ? meta.userPrompt : undefined;
+    const documentIds = Array.isArray(meta.documentIds)
+      ? (meta.documentIds as string[])
+      : [];
+    const useDefaults = meta.useDefaults !== false;
 
     const limit =
       campaign.depth === "quick" ? 2 : campaign.depth === "deep" ? 6 : 4;
     const selected = queryRows.slice(0, limit);
 
-    for (const [index, queryRow] of selected.entries()) {
+    // PDF / trusted memory grounding for claim extraction
+    let pdfContext = "";
+    if (documentIds.length > 0 || useDefaults) {
+      await pushProgress("Pulling PDF / memory context for grounded claims…");
+      const chunks = await retrieveRelevantChunks({
+        workspaceId: campaign.workspaceId,
+        query: userPrompt || campaign.topic,
+        userId: campaign.userId,
+        limit: 8,
+      });
+      const filtered =
+        documentIds.length > 0
+          ? chunks.filter(
+              (c) =>
+                c.kind === "memory" ||
+                (c.documentId && documentIds.includes(c.documentId)),
+            )
+          : chunks;
+      if (filtered.length) {
+        pdfContext = filtered
+          .map(
+            (c) =>
+              `[${c.kind}${c.pageNumber ? ` p.${c.pageNumber}` : ""}] ${c.title}: ${c.content}`,
+          )
+          .join("\n")
+          .slice(0, 8000);
+        notes.push(`### document_context\n${pdfContext}`);
+      }
+    }
+
+    await pushProgress(
+      `Running ${selected.length} web queries (concurrency 3)…`,
+    );
+
+    type QueryOutcome = {
+      queryRow: (typeof selected)[number];
+      index: number;
+      text: string;
+      hits: Array<{
+        url: string;
+        title: string;
+        publisher?: string | null;
+        snippet?: string | null;
+      }>;
+      cached: boolean;
+    };
+
+    const outcomes = await mapPool(selected, 3, async (queryRow, index) => {
       await db
         .update(researchQueries)
         .set({ status: "running" })
@@ -126,13 +224,25 @@ export async function runResearchCampaign(campaignId: string) {
         feature: "research_campaign",
       });
 
-      notes.push(`### ${queryRow.cluster}\nQuery: ${queryRow.query}\n${research.text}`);
       await pushProgress(
         `Query ${index + 1} done — ${research.hits.length} hits${research.cached ? " (cache)" : ""}.`,
       );
 
+      return {
+        queryRow,
+        index,
+        text: research.text,
+        hits: research.hits,
+        cached: research.cached,
+      } satisfies QueryOutcome;
+    });
+
+    for (const outcome of outcomes.sort((a, b) => a.index - b.index)) {
+      const { queryRow, text, hits } = outcome;
+      notes.push(`### ${queryRow.cluster}\nQuery: ${queryRow.query}\n${text}`);
+
       let firstSourceId: string | null = null;
-      for (const hit of research.hits.slice(0, 5)) {
+      for (const hit of hits.slice(0, 5)) {
         let sourceId = urlToSourceId.get(hit.url);
         if (!sourceId) {
           const [source] = await db
@@ -145,7 +255,8 @@ export async function runResearchCampaign(campaignId: string) {
               publisher: hit.publisher,
               sourceType: "web",
               snippet: hit.snippet,
-              qualityScore: hit.url.includes("gov.in") || hit.url.includes("kvs") ? 0.9 : 0.6,
+              qualityScore:
+                hit.url.includes("gov.in") || hit.url.includes("kvs") ? 0.9 : 0.6,
             })
             .returning();
           sourceId = source.id;
@@ -154,7 +265,7 @@ export async function runResearchCampaign(campaignId: string) {
         if (!firstSourceId) firstSourceId = sourceId;
       }
 
-      if (research.hits.length === 0) {
+      if (hits.length === 0) {
         const [source] = await db
           .insert(sources)
           .values({
@@ -162,8 +273,8 @@ export async function runResearchCampaign(campaignId: string) {
             campaignId,
             title: `Research note: ${queryRow.cluster}`,
             sourceType: "ai_web_research",
-            snippet: research.text.slice(0, 500),
-            rawContent: research.text,
+            snippet: text.slice(0, 500),
+            rawContent: text,
             qualityScore: 0.4,
           })
           .returning();
@@ -174,7 +285,7 @@ export async function runResearchCampaign(campaignId: string) {
         campaignId,
         queryId: queryRow.id,
         sourceId: firstSourceId,
-        content: research.text,
+        content: text,
       });
 
       await db
@@ -190,7 +301,8 @@ export async function runResearchCampaign(campaignId: string) {
       system: claimExtractionSystem,
       user: `Workspace: ${workspace.name}
 Topic: ${campaign.topic}
-
+${userPrompt ? `User research prompt: ${userPrompt}\n` : ""}
+${pdfContext ? `DOCUMENT / MEMORY CONTEXT:\n${pdfContext}\n\n` : ""}
 RESEARCH NOTES:
 ${notes.join("\n\n").slice(0, 24000)}`,
       userId: campaign.userId,

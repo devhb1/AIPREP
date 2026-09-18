@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   const workspace = await assertWorkspace(user.id, workspaceId);
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (view === "session" && sessionId) {
+  if (sessionId) {
     const detail = await getInterviewSession({
       sessionId,
       workspaceId,

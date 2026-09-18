@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { aiUsageEvents, documents, workspaces } from "@/lib/db/schema";
-import { daysUntil, formatDate } from "@/lib/utils";
+import { workspaces } from "@/lib/db/schema";
+import { formatDate, formatDaysRemaining, daysUntil } from "@/lib/utils";
 import { computeNextBestAction } from "@/lib/planning/planner";
-import {
-  WorkspaceChipNav,
-} from "@/components/workspace-nav";
+import { sql } from "@/lib/db";
+import { WorkspaceChipNav } from "@/components/workspace-nav";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -24,30 +23,30 @@ export default async function WorkspacePage({ params }: Props) {
     .limit(1);
   if (!workspace) notFound();
 
-  const docs = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.workspaceId, id))
-    .orderBy(desc(documents.createdAt));
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
 
-  const usage = await db
-    .select()
-    .from(aiUsageEvents)
-    .where(eq(aiUsageEvents.workspaceId, id))
-    .orderBy(desc(aiUsageEvents.createdAt))
-    .limit(30);
+  const [docStats, spendRows, nextBestAction] = await Promise.all([
+    sql<{ total: number; ready: number; pending: number }[]>`
+      select
+        count(*)::int as total,
+        coalesce(sum(case when status = 'ready' then 1 else 0 end), 0)::int as ready,
+        coalesce(sum(case when status in ('uploaded','processing','queued') then 1 else 0 end), 0)::int as pending
+      from documents
+      where workspace_id = ${id}::uuid
+    `,
+    sql<{ spend: number }[]>`
+      select coalesce(sum(estimated_cost_usd), 0)::float as spend
+      from ai_usage_events
+      where workspace_id = ${id}::uuid and created_at >= ${start.toISOString()}::timestamptz
+    `,
+    computeNextBestAction({ workspaceId: id, userId: user.id }),
+  ]);
 
-  const nextBestAction = await computeNextBestAction({
-    workspaceId: id,
-    userId: user.id,
-  });
-
-  const readyDocs = docs.filter((d) => d.status === "ready").length;
   const days = daysUntil(workspace.interviewDate ?? workspace.examDate);
-  const todaySpend = usage
-    .filter((u) => new Date(u.createdAt) >= new Date(new Date().setHours(0, 0, 0, 0)))
-    .reduce((sum, u) => sum + (u.estimatedCostUsd ?? 0), 0);
-
+  const readyDocs = Number(docStats[0]?.ready ?? 0);
+  const docTotal = Number(docStats[0]?.total ?? 0);
+  const todaySpend = Number(spendRows[0]?.spend ?? 0);
   const actionHref = `/workspace/${id}/${nextBestAction.href}`;
 
   return (
@@ -88,9 +87,9 @@ export default async function WorkspacePage({ params }: Props) {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ["Days remaining", days === null ? "—" : String(days)],
+          ["Days remaining", formatDaysRemaining(days)],
           ["Documents ready", String(readyDocs)],
-          ["Docs total", String(docs.length)],
+          ["Docs total", String(docTotal)],
           ["Today AI $", todaySpend.toFixed(4)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">

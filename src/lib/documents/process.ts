@@ -77,27 +77,32 @@ export async function processDocumentJob(jobId: string) {
       feature: "document_embed",
     });
 
-    for (let i = 0; i < allChunks.length; i += 1) {
-      const chunk = allChunks[i]!;
-      const embedding = embeddings[i] ?? [];
-      const vectorLiteral = `[${embedding.join(",")}]`;
-      await sql`
-        INSERT INTO document_chunks (
-          id, document_id, workspace_id, page_number, chunk_index, content,
-          token_estimate, embedding, content_hash, created_at
-        ) VALUES (
-          gen_random_uuid(),
-          ${documentId},
-          ${doc.workspaceId},
-          ${chunk.pageNumber},
-          ${chunk.chunkIndex},
-          ${chunk.content},
-          ${chunk.tokenEstimate},
-          ${sql.unsafe(`'${vectorLiteral}'::vector`)},
-          ${chunk.contentHash},
-          now()
-        )
-      `;
+    const BATCH = 40;
+    for (let offset = 0; offset < allChunks.length; offset += BATCH) {
+      const slice = allChunks.slice(offset, offset + BATCH);
+      await Promise.all(
+        slice.map(async (chunk, j) => {
+          const embedding = embeddings[offset + j] ?? [];
+          const vectorLiteral = `[${embedding.join(",")}]`;
+          await sql`
+            INSERT INTO document_chunks (
+              id, document_id, workspace_id, page_number, chunk_index, content,
+              token_estimate, embedding, content_hash, created_at
+            ) VALUES (
+              gen_random_uuid(),
+              ${documentId}::uuid,
+              ${doc.workspaceId}::uuid,
+              ${chunk.pageNumber},
+              ${chunk.chunkIndex},
+              ${chunk.content},
+              ${chunk.tokenEstimate},
+              ${sql.unsafe(`'${vectorLiteral}'::vector`)},
+              ${chunk.contentHash},
+              now()
+            )
+          `;
+        }),
+      );
     }
 
     await db

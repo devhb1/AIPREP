@@ -33,7 +33,7 @@ export async function getUsageSummary(params: {
   const week = new Date();
   week.setUTCDate(week.getUTCDate() - 7);
 
-  const [todayRows, weekRows, byFeature] = await Promise.all([
+  const [todayRows, weekRows, byFeature, voiceToday] = await Promise.all([
     db
       .select({
         total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
@@ -72,6 +72,23 @@ export async function getUsageSummary(params: {
         ),
       )
       .groupBy(aiUsageEvents.feature),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+        calls: sql<number>`count(*)::int`,
+      })
+      .from(aiUsageEvents)
+      .where(
+        and(
+          eq(aiUsageEvents.workspaceId, params.workspaceId),
+          gte(aiUsageEvents.createdAt, start),
+          sql`(
+          ${aiUsageEvents.feature} like 'realtime%'
+          OR ${aiUsageEvents.feature} like 'voice%'
+          OR ${aiUsageEvents.feature} = 'interview_evaluate'
+        )`,
+        ),
+      ),
   ]);
 
   const settings = await db
@@ -80,17 +97,23 @@ export async function getUsageSummary(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
 
+  const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
+  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 3);
+
   return {
     todaySpendUsd: Number(todayRows[0]?.total ?? 0),
     todayCalls: Number(todayRows[0]?.calls ?? 0),
     weekSpendUsd: Number(weekRows[0]?.total ?? 0),
     weekCalls: Number(weekRows[0]?.calls ?? 0),
+    todayVoiceSpendUsd: Number(voiceToday[0]?.total ?? 0),
+    todayVoiceCalls: Number(voiceToday[0]?.calls ?? 0),
     byFeature: byFeature.map((row) => ({
       feature: row.feature,
       totalUsd: Number(row.total ?? 0),
       calls: Number(row.calls ?? 0),
     })),
-    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 1,
+    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 5,
+    maxDailyVoiceSpendUsd,
   };
 }
 
@@ -104,7 +127,7 @@ export async function assertWithinDailyBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
 
-  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 1;
+  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 5;
   const redisKey = `spend:${params.workspaceId}:${startOfUtcDay().toISOString().slice(0, 10)}`;
 
   const cached = await redisSafe(async (redis) => {
@@ -128,6 +151,46 @@ export async function assertWithinDailyBudget(params: {
   }
 
   return { spent, maxDaily };
+}
+
+export async function assertWithinVoiceBudget(params: {
+  workspaceId: string;
+  userId: string;
+}) {
+  await assertWithinDailyBudget(params);
+
+  const settings = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, params.workspaceId))
+    .limit(1);
+  const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
+  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 3);
+
+  const start = startOfUtcDay();
+  const rows = await db
+    .select({
+      total: sql<number>`coalesce(sum(${aiUsageEvents.estimatedCostUsd}), 0)`,
+    })
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.workspaceId, params.workspaceId),
+        gte(aiUsageEvents.createdAt, start),
+        sql`(
+          ${aiUsageEvents.feature} like 'realtime%'
+          OR ${aiUsageEvents.feature} like 'voice%'
+          OR ${aiUsageEvents.feature} = 'interview_evaluate'
+        )`,
+      ),
+    );
+  const spent = Number(rows[0]?.total ?? 0);
+  if (spent >= maxVoice) {
+    throw new Error(
+      `Daily voice budget reached ($${spent.toFixed(4)} / $${maxVoice}). Raise voice cap in Settings.`,
+    );
+  }
+  return { spent, maxVoice };
 }
 
 export async function bumpDailySpendCache(params: {

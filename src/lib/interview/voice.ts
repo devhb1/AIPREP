@@ -8,16 +8,21 @@ import {
 } from "@/lib/db/schema";
 import { createRealtimeEphemeralSession } from "@/lib/ai/realtime";
 import { endInterviewSession, type JudgeMode } from "@/lib/interview/session";
-import { voiceInterviewSystem } from "@prompts";
+import { voiceInterviewSystem, type InterviewLanguage } from "@prompts";
 
-function judgeVoiceInstructions(mode: JudgeMode, workspaceName: string) {
-  return voiceInterviewSystem(workspaceName, mode);
+function judgeVoiceInstructions(
+  mode: JudgeMode,
+  workspaceName: string,
+  language: InterviewLanguage,
+) {
+  return voiceInterviewSystem(workspaceName, mode, language);
 }
 
 export async function startVoiceInterview(params: {
   workspaceId: string;
   userId: string;
   judgeMode?: JudgeMode;
+  language?: InterviewLanguage;
   recordingConsent?: boolean;
 }) {
   const [workspace] = await db
@@ -28,6 +33,7 @@ export async function startVoiceInterview(params: {
   if (!workspace) throw new Error("Workspace not found");
 
   const judgeMode = params.judgeMode ?? "normal";
+  const language = params.language ?? "en";
   const [session] = await db
     .insert(interviewSessions)
     .values({
@@ -39,6 +45,8 @@ export async function startVoiceInterview(params: {
       targetMinutes: 20,
       recordingConsent: Boolean(params.recordingConsent),
       speechMetrics: {
+        language,
+        judgeMode,
         fillerCount: 0,
         candidateTurns: 0,
         interviewerTurns: 0,
@@ -48,7 +56,7 @@ export async function startVoiceInterview(params: {
     .returning();
 
   const ephemeral = await createRealtimeEphemeralSession({
-    instructions: judgeVoiceInstructions(judgeMode, workspace.name),
+    instructions: judgeVoiceInstructions(judgeMode, workspace.name, language),
     userId: params.userId,
     workspaceId: params.workspaceId,
   });
@@ -56,6 +64,7 @@ export async function startVoiceInterview(params: {
   return {
     session,
     realtime: ephemeral,
+    language,
   };
 }
 
@@ -79,7 +88,6 @@ export async function persistVoiceTranscript(params: {
     .limit(1);
   if (!session) throw new Error("Session not found");
 
-  // Replace existing turns for this voice session snapshot
   await db.delete(interviewTurns).where(eq(interviewTurns.sessionId, session.id));
 
   if (params.turns.length) {
@@ -94,9 +102,13 @@ export async function persistVoiceTranscript(params: {
   }
 
   if (params.speechMetrics) {
+    const merged = {
+      ...(session.speechMetrics ?? {}),
+      ...params.speechMetrics,
+    };
     await db
       .update(interviewSessions)
-      .set({ speechMetrics: params.speechMetrics })
+      .set({ speechMetrics: merged })
       .where(eq(interviewSessions.id, session.id));
 
     await db.insert(speechMetricsEvents).values({
@@ -104,7 +116,7 @@ export async function persistVoiceTranscript(params: {
       workspaceId: params.workspaceId,
       metricType: "session_summary",
       value: Number(params.speechMetrics.fillerCount ?? 0),
-      payload: params.speechMetrics,
+      payload: merged,
     });
   }
 

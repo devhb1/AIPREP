@@ -75,7 +75,7 @@ export async function ensureKvsSeedWorkspace(userId: string) {
 
   await db.insert(workspaceSettings).values({
     workspaceId: workspace.id,
-    maxDailyAiSpendUsd: 1,
+    maxDailyAiSpendUsd: 5,
     maxResearchQueries: 20,
     settings: {
       seedLabel: "KVS PRT Interview 2026",

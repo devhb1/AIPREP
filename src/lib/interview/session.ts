@@ -43,6 +43,14 @@ const turnSchema = z.object({
 
 const reportSchema = z.object({
   overallScore: z.number().min(0).max(10),
+  dimensions: z
+    .object({
+      content: z.number().min(0).max(10).optional(),
+      structure: z.number().min(0).max(10).optional(),
+      communication: z.number().min(0).max(10).optional(),
+      speech: z.number().min(0).max(10).nullable().optional(),
+    })
+    .optional(),
   summary: z.string(),
   strengths: z.array(z.string()),
   weaknesses: z.array(z.string()),
@@ -342,8 +350,14 @@ export async function endInterviewSession(params: {
     temperature: 0.2,
   });
 
-  let report = {
+  let report: z.infer<typeof reportSchema> = {
     overallScore: 6,
+    dimensions: {
+      content: 6,
+      structure: 6,
+      communication: 6,
+      speech: session.mode === "voice" ? 6 : null,
+    },
     summary: "Session completed. Review transcript and practice clearer examples.",
     strengths: ["Completed the mock"],
     weaknesses: ["Needs more concrete classroom examples"],
