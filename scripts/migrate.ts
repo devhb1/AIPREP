@@ -3,6 +3,14 @@ import { readdirSync, readFileSync } from "fs";
 import { resolve } from "path";
 import postgres from "postgres";
 
+function resolveDatabaseUrl() {
+  const pooler = process.env.SESSION_POOLER_URL?.trim();
+  const direct = process.env.DATABASE_URL?.trim();
+  if (pooler) return pooler;
+  if (direct) return direct;
+  throw new Error("DATABASE_URL (or SESSION_POOLER_URL) is not set");
+}
+
 function looksLikeDirectSupabaseHost(url: string) {
   try {
     const host = new URL(url).hostname;
@@ -13,22 +21,19 @@ function looksLikeDirectSupabaseHost(url: string) {
 }
 
 async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is required");
-  }
+  const url = resolveDatabaseUrl();
 
   if (looksLikeDirectSupabaseHost(url)) {
     console.warn(
       [
         "",
-        "WARNING: DATABASE_URL points at db.<project>.supabase.co (direct).",
-        "On many networks that host is IPv6-only and connections fail with ECONNREFUSED.",
-        "Use Supabase → Project Settings → Database → Connection string → Session pooler.",
-        "URL-encode special password characters (@ → %40, $ → %24).",
+        "WARNING: Using direct db.<project>.supabase.co.",
+        "On Vercel this often fails with ENOTFOUND. Prefer SESSION_POOLER_URL.",
         "",
       ].join("\n"),
     );
+  } else {
+    console.log("Using pooler/custom DATABASE connection host.");
   }
 
   const withSsl = url.includes("sslmode=")
@@ -91,7 +96,7 @@ main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(error);
   if (
-    /ECONNREFUSED|ENETUNREACH|fetch failed|tenant\/user|password authentication/i.test(
+    /ECONNREFUSED|ENETUNREACH|ENOTFOUND|fetch failed|tenant\/user|password authentication/i.test(
       message,
     )
   ) {
@@ -99,11 +104,7 @@ main().catch((error) => {
       [
         "",
         "Migration could not reach Postgres.",
-        "1. Open Supabase → Database → Connection string",
-        "2. Choose Session pooler (IPv4)",
-        "3. Replace DATABASE_URL in .env (encode @ $ etc. in the password)",
-        "4. Re-run: npm run db:migrate",
-        "Or paste SQL from db/migrations/*.sql into the Supabase SQL Editor in order.",
+        "Set SESSION_POOLER_URL to the Supabase Session pooler URI, then retry.",
         "",
       ].join("\n"),
     );
