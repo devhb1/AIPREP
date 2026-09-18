@@ -32,10 +32,14 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
   const isApi = path.startsWith("/api/");
+  // Manifest/icon fetches often omit cookies → redirecting them to /login
+  // causes a login+manifest storm on every navigation (felt as "stuck/slow").
   const isPublic =
     isAuthPage ||
     path.startsWith("/auth") ||
     path === "/" ||
+    path === "/manifest.webmanifest" ||
+    path.startsWith("/icon") ||
     path.startsWith("/api/health") ||
     path.startsWith("/api/jobs");
 
@@ -45,6 +49,8 @@ export async function updateSession(request: NextRequest) {
     }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("next", `${path}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }
 

@@ -158,77 +158,6 @@ export default function MemoryPage() {
         ))}
       </div>
 
-      <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="text-lg text-ink">Topics</h3>
-        <p className="mt-1 text-sm text-muted">
-          Counts from claims and memory. Tap a topic to filter, or research more.
-        </p>
-        {topics.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No topics yet — run research.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {topics.slice(0, 12).map((t) => (
-              <li
-                key={t.topic}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${
-                  topicFilter === t.topic
-                    ? "border-accent bg-accent-soft"
-                    : "border-line bg-white"
-                }`}
-              >
-                <button
-                  type="button"
-                  className="text-left"
-                  onClick={() =>
-                    setTopicFilter((prev) => (prev === t.topic ? null : t.topic))
-                  }
-                >
-                  <p className="font-medium text-ink">{t.topic}</p>
-                  <p className="text-xs text-muted">
-                    {t.claimCount} claims · {t.memoryCount} memory
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === t.topic}
-                  onClick={() =>
-                    void act({ action: "research_topic", topic: t.topic }, t.topic)
-                  }
-                  className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold"
-                >
-                  Add more
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="text-lg text-ink">Add a note</h3>
-        <form onSubmit={addNote} className="mt-3 space-y-2">
-          <input
-            value={noteTopic}
-            onChange={(e) => setNoteTopic(e.target.value)}
-            placeholder="Topic (optional)"
-            className="min-h-11 w-full rounded-xl border border-line px-3 py-2 text-sm"
-          />
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Something you want mentor + plan to remember…"
-            rows={3}
-            className="w-full rounded-xl border border-line px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
-          >
-            Save note
-          </button>
-        </form>
-      </section>
-
       <section className="space-y-3">
         {loading ? (
           <div className="space-y-3">
@@ -241,7 +170,14 @@ export default function MemoryPage() {
           </div>
         ) : ledger.length === 0 ? (
           <p className="rounded-2xl border border-line bg-panel p-5 text-sm text-muted">
-            Nothing in this tab yet.
+            Nothing in this tab yet
+            {tab === "approved"
+              ? " — approve scraped claims to build trusted memory."
+              : tab === "documents"
+                ? " — upload PDFs from Documents."
+                : tab === "stories"
+                  ? " — add stories from Research or notes."
+                  : "."}
           </p>
         ) : (
           ledger
@@ -391,6 +327,81 @@ export default function MemoryPage() {
           })
         )}
       </section>
+
+      {(tab === "all" || tab === "scraped") && (
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <h3 className="text-lg text-ink">Topics</h3>
+        <p className="mt-1 text-sm text-muted">
+          Counts from claims and memory. Tap a topic to filter, or research more.
+        </p>
+        {topics.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No topics yet — run research.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {topics.slice(0, 12).map((t) => (
+              <li
+                key={t.topic}
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${
+                  topicFilter === t.topic
+                    ? "border-accent bg-accent-soft"
+                    : "border-line bg-white"
+                }`}
+              >
+                <button
+                  type="button"
+                  className="text-left"
+                  onClick={() =>
+                    setTopicFilter((prev) => (prev === t.topic ? null : t.topic))
+                  }
+                >
+                  <p className="font-medium text-ink">{t.topic}</p>
+                  <p className="text-xs text-muted">
+                    {t.claimCount} claims · {t.memoryCount} memory
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === t.topic}
+                  onClick={() =>
+                    void act({ action: "research_topic", topic: t.topic }, t.topic)
+                  }
+                  className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold"
+                >
+                  Add more
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      )}
+
+      {(tab === "all" || tab === "notes") && (
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <h3 className="text-lg text-ink">Add a note</h3>
+        <form onSubmit={addNote} className="mt-3 space-y-2">
+          <input
+            value={noteTopic}
+            onChange={(e) => setNoteTopic(e.target.value)}
+            placeholder="Topic (optional)"
+            className="min-h-11 w-full rounded-xl border border-line px-3 py-2 text-sm"
+          />
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Something you want mentor + plan to remember…"
+            rows={3}
+            className="w-full rounded-xl border border-line px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Save note
+          </button>
+        </form>
+      </section>
+      )}
     </main>
   );
 }

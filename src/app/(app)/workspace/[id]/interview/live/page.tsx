@@ -200,13 +200,12 @@ export default function LiveVoiceInterviewPage() {
       const realtime = bootData.realtime as
         | { clientSecret?: string; model?: string }
         | undefined;
-      if (!session?.id || !realtime?.clientSecret || !realtime?.model) {
+      if (!session?.id || !realtime?.clientSecret) {
         throw new Error("Invalid voice start response from server.");
       }
 
       setSessionId(session.id);
       const clientSecret = realtime.clientSecret;
-      const model = realtime.model;
 
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -240,7 +239,8 @@ export default function LiveVoiceInterviewPage() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=${model}`, {
+      // GA WebRTC: POST /v1/realtime/calls (model is bound to the ephemeral client secret)
+      const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
         body: offer.sdp,
         headers: {
