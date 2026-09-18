@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   claims,
@@ -165,9 +165,9 @@ export async function computeNextBestAction(params: {
   workspaceId: string;
   userId: string;
 }) {
-  const [pendingClaims, docs, openMistakes, dueTasks] = await Promise.all([
+  const [pendingClaims, docStats, openMistakes, dueTasks] = await Promise.all([
     db
-      .select()
+      .select({ id: claims.id })
       .from(claims)
       .where(
         and(
@@ -177,7 +177,11 @@ export async function computeNextBestAction(params: {
       )
       .limit(5),
     db
-      .select({ id: documents.id, status: documents.status })
+      .select({
+        total: count(),
+        ready: sql<number>`sum(case when ${documents.status} = 'ready' then 1 else 0 end)`,
+        pending: sql<number>`sum(case when ${documents.status} in ('uploaded','processing','queued') then 1 else 0 end)`,
+      })
       .from(documents)
       .where(eq(documents.workspaceId, params.workspaceId)),
     db
@@ -199,6 +203,9 @@ export async function computeNextBestAction(params: {
       .limit(20),
   ]);
 
+  const readyDocs = Number(docStats[0]?.ready ?? 0);
+  const pendingDocs = Number(docStats[0]?.pending ?? 0);
+
   if (pendingClaims.length) {
     return {
       title: `Review ${pendingClaims.length}+ research claim(s)`,
@@ -209,13 +216,22 @@ export async function computeNextBestAction(params: {
     };
   }
 
-  const readyDocs = docs.filter((d) => d.status === "ready").length;
   if (readyDocs === 0) {
     return {
       title: "Upload official KVS PDFs",
       why: "Syllabus and quizzes need grounded source material.",
       priority: "HIGH" as const,
       minutes: 10,
+      href: "documents",
+    };
+  }
+
+  if (pendingDocs > 0) {
+    return {
+      title: "Wait for document indexing",
+      why: `${pendingDocs} document(s) are still being processed.`,
+      priority: "MEDIUM" as const,
+      minutes: 5,
       href: "documents",
     };
   }

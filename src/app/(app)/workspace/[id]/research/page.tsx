@@ -220,26 +220,47 @@ export default function ResearchPage() {
 
         {docs.length > 0 ? (
           <div>
-            <p className="mb-2 text-sm text-muted">Ground in PDFs (optional)</p>
+            <p className="mb-2 text-sm text-muted">
+              Ground in PDFs (optional) — only ready files can be selected
+            </p>
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-line bg-white p-3">
-              {docs.map((d) => (
-                <label key={d.id} className="flex min-h-10 items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selectedDocs.includes(d.id)}
-                    onChange={() => toggleDoc(d.id)}
-                    disabled={starting || Boolean(live)}
-                    className="mt-1"
-                  />
-                  <span>
-                    {d.title}{" "}
-                    <span className="text-xs text-muted">({d.status})</span>
-                  </span>
-                </label>
-              ))}
+              {docs.map((d) => {
+                const ready = d.status === "ready";
+                return (
+                  <label
+                    key={d.id}
+                    className={`flex min-h-10 items-start gap-2 text-sm ${
+                      ready ? "" : "opacity-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDocs.includes(d.id)}
+                      onChange={() => toggleDoc(d.id)}
+                      disabled={!ready || starting || Boolean(live)}
+                      className="mt-1"
+                    />
+                    <span>
+                      {d.title}{" "}
+                      <span className="text-xs text-muted">({d.status})</span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <p className="rounded-xl border border-dashed border-line bg-white p-3 text-sm text-muted">
+            No PDFs yet.{" "}
+            <Link
+              href={`/workspace/${workspaceId}/documents`}
+              className="font-semibold text-accent"
+            >
+              Upload documents
+            </Link>{" "}
+            to ground research in your files.
+          </p>
+        )}
 
         <button
           type="submit"
@@ -296,6 +317,25 @@ export default function ResearchPage() {
                 {c.summary ? <p className="mt-2 text-muted">{c.summary}</p> : null}
                 {c.errorMessage ? (
                   <p className="mt-2 text-[var(--danger)]">{c.errorMessage}</p>
+                ) : null}
+                {(c.queries ?? []).length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs text-muted">
+                    {(c.queries ?? []).slice(0, 4).map((q) => (
+                      <li key={q.id}>
+                        <span className="font-semibold text-ink">{q.cluster}</span> ·{" "}
+                        {q.status} — {q.query.slice(0, 80)}
+                        {q.query.length > 80 ? "…" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {c.status === "completed" ? (
+                  <Link
+                    href={`/workspace/${workspaceId}/memory?tab=scraped`}
+                    className="mt-3 inline-flex min-h-10 items-center rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    Review claims in Memory →
+                  </Link>
                 ) : null}
               </div>
               <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">

@@ -30,9 +30,8 @@ export default async function DashboardPage() {
         </p>
         <h2 className="mt-2 text-4xl text-ink">Preparation workspaces</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Phase 1 foundation: upload PDFs, index them with embeddings, and chat
-          with a mentor grounded in your documents. Beta focus is KVS PRT
-          Interview 2026.
+          Research → approve in Memory → personal Plan → live voice mock. Built for
+          KVS PRT Interview 2026 beta.
         </p>
       </header>
 

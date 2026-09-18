@@ -69,6 +69,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ stories });
   }
 
+  if (view === "hub") {
+    const [sessions, checklist, library, stories] = await Promise.all([
+      listInterviewSessions(workspaceId),
+      ensureInterviewChecklist({ workspaceId, userId: user.id }),
+      listAnswerLibrary(workspaceId),
+      listPersonalStories(workspaceId),
+    ]);
+    return NextResponse.json({ sessions, checklist, library, stories });
+  }
+
   const sessions = await listInterviewSessions(workspaceId);
   return NextResponse.json({ sessions });
 }

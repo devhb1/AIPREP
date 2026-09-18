@@ -51,6 +51,7 @@ export default function MemoryPage() {
       ? initialTab
       : "all",
   );
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const [ledger, setLedger] = useState<LedgerItem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -140,7 +141,11 @@ export default function MemoryPage() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setTab(t.id);
+              setTopicFilter(null);
+              router.replace(`?tab=${t.id}`, { scroll: false });
+            }}
             className={`min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-semibold ${
               tab === t.id
                 ? "bg-accent text-white"
@@ -154,9 +159,9 @@ export default function MemoryPage() {
       </div>
 
       <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="text-lg text-ink">Topic graph</h3>
+        <h3 className="text-lg text-ink">Topics</h3>
         <p className="mt-1 text-sm text-muted">
-          Claims ↔ topics ↔ memory counts. Drill to research more on a topic.
+          Counts from claims and memory. Tap a topic to filter, or research more.
         </p>
         {topics.length === 0 ? (
           <p className="mt-3 text-sm text-muted">No topics yet — run research.</p>
@@ -165,14 +170,24 @@ export default function MemoryPage() {
             {topics.slice(0, 12).map((t) => (
               <li
                 key={t.topic}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-white px-3 py-2 text-sm"
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${
+                  topicFilter === t.topic
+                    ? "border-accent bg-accent-soft"
+                    : "border-line bg-white"
+                }`}
               >
-                <div>
+                <button
+                  type="button"
+                  className="text-left"
+                  onClick={() =>
+                    setTopicFilter((prev) => (prev === t.topic ? null : t.topic))
+                  }
+                >
                   <p className="font-medium text-ink">{t.topic}</p>
                   <p className="text-xs text-muted">
                     {t.claimCount} claims · {t.memoryCount} memory
                   </p>
-                </div>
+                </button>
                 <button
                   type="button"
                   disabled={busyId === t.topic}
@@ -229,7 +244,13 @@ export default function MemoryPage() {
             Nothing in this tab yet.
           </p>
         ) : (
-          ledger.map((item) => {
+          ledger
+            .filter((item) => {
+              if (!topicFilter) return true;
+              const topic = item.topic ?? item.topicId;
+              return topic === topicFilter;
+            })
+            .map((item) => {
             const body = item.statement ?? item.content ?? item.title ?? "";
             const topic = item.topic ?? item.topicId;
             return (
@@ -244,9 +265,14 @@ export default function MemoryPage() {
                       {item.status ? ` · ${item.status}` : ""}
                       {topic ? ` · ${topic}` : ""}
                     </p>
-                    <p className="mt-2 text-sm text-ink whitespace-pre-wrap">{body}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{body}</p>
                     {item.assessment ? (
                       <p className="mt-2 text-xs text-muted">{item.assessment}</p>
+                    ) : null}
+                    {item.conflictNote ? (
+                      <p className="mt-2 text-xs font-medium text-[var(--danger)]">
+                        Conflict: {item.conflictNote}
+                      </p>
                     ) : null}
                   </div>
                   {item.votes != null ? (
@@ -260,7 +286,18 @@ export default function MemoryPage() {
                   <ul className="mt-3 space-y-1 text-xs text-muted">
                     {item.sources.map((s, idx) => (
                       <li key={`${item.id}-s-${idx}`}>
-                        {s.title ?? s.url ?? "Source"}
+                        {s.url ? (
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-accent underline"
+                          >
+                            {s.title ?? s.url}
+                          </a>
+                        ) : (
+                          (s.title ?? "Source")
+                        )}
                         {s.sourceType ? ` (${s.sourceType})` : ""}
                       </li>
                     ))}

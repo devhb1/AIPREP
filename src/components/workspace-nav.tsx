@@ -7,8 +7,8 @@ const LINKS = [
   { path: "", label: "Home", match: "exact" as const },
   { path: "memory", label: "Memory" },
   { path: "interview", label: "Interview" },
+  { path: "plan", label: "Plan" },
   { path: "chat", label: "Chat" },
-  { path: "research", label: "Research" },
 ];
 
 export function WorkspaceMobileNav({ workspaceId }: { workspaceId: string }) {
@@ -43,6 +43,8 @@ export function WorkspaceMobileNav({ workspaceId }: { workspaceId: string }) {
 }
 
 export function WorkspaceChipNav({ workspaceId }: { workspaceId: string }) {
+  const pathname = usePathname();
+  const base = `/workspace/${workspaceId}`;
   const chips = [
     ["memory", "Memory"],
     ["documents", "Documents"],
@@ -57,19 +59,23 @@ export function WorkspaceChipNav({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {chips.map(([path, label]) => (
-        <Link
-          key={path}
-          href={`/workspace/${workspaceId}/${path}`}
-          className={
-            path === "interview" || path === "memory"
-              ? "min-h-11 shrink-0 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white"
-              : "min-h-11 shrink-0 rounded-xl border border-line bg-panel px-4 py-2.5 text-sm font-semibold"
-          }
-        >
-          {label}
-        </Link>
-      ))}
+      {chips.map(([path, label]) => {
+        const href = `${base}/${path}`;
+        const active = pathname.startsWith(href);
+        return (
+          <Link
+            key={path}
+            href={href}
+            className={
+              active
+                ? "min-h-11 shrink-0 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white"
+                : "min-h-11 shrink-0 rounded-xl border border-line bg-panel px-4 py-2.5 text-sm font-semibold"
+            }
+          >
+            {label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

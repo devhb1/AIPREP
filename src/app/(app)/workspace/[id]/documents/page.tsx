@@ -13,6 +13,8 @@ type Doc = {
   errorMessage: string | null;
 };
 
+const MULTIPART_MAX = 4 * 1024 * 1024;
+
 export default function DocumentsPage() {
   const params = useParams<{ id: string }>();
   const workspaceId = params.id;
@@ -24,13 +26,16 @@ export default function DocumentsPage() {
 
   async function load() {
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}`);
-      const data = await res.json();
+      const res = await fetch(`/api/documents?workspaceId=${workspaceId}`);
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Could not load documents");
+        setError(
+          typeof data.error === "string" ? data.error : "Could not load documents",
+        );
         return;
       }
       setDocs(data.documents ?? []);
+      setError(null);
     } catch {
       setError("Network error loading documents");
     }
@@ -42,6 +47,59 @@ export default function DocumentsPage() {
     return () => clearInterval(timer);
   }, [workspaceId]);
 
+  async function uploadViaSigned(pdf: File) {
+    const signRes = await fetch("/api/documents/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "sign",
+        workspaceId,
+        fileName: pdf.name,
+        byteSize: pdf.size,
+      }),
+    });
+    const signData = await signRes.json().catch(() => ({}));
+    if (!signRes.ok) {
+      throw new Error(
+        typeof signData.error === "string"
+          ? signData.error
+          : "Could not start direct upload",
+      );
+    }
+
+    const put = await fetch(signData.signedUrl as string, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/pdf",
+        ...(signData.token ? { "x-upsert": "false" } : {}),
+      },
+      body: pdf,
+    });
+    if (!put.ok) {
+      const text = await put.text().catch(() => "");
+      throw new Error(text.slice(0, 180) || `Direct storage upload failed (${put.status})`);
+    }
+
+    const completeRes = await fetch("/api/documents/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "complete",
+        workspaceId,
+        documentId: signData.document?.id,
+      }),
+    });
+    const completeData = await completeRes.json().catch(() => ({}));
+    if (!completeRes.ok && completeRes.status !== 202) {
+      throw new Error(
+        typeof completeData.error === "string"
+          ? completeData.error
+          : "Could not finalize upload",
+      );
+    }
+    return completeData;
+  }
+
   async function onUpload(e: FormEvent) {
     e.preventDefault();
     if (!file) return;
@@ -49,26 +107,41 @@ export default function DocumentsPage() {
     setError(null);
     setMessage(null);
     try {
-      const body = new FormData();
-      body.append("file", file);
-      body.append("workspaceId", workspaceId);
-      const res = await fetch("/api/documents/upload", {
-        method: "POST",
-        body,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok && res.status !== 202) {
-        setError(data.error ?? "Upload failed");
+      if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+        setError("Only PDF uploads are supported. On iPhone, Share → Save as PDF.");
         return;
       }
+
+      let data: Record<string, unknown>;
+      if (file.size > MULTIPART_MAX) {
+        data = await uploadViaSigned(file);
+      } else {
+        const body = new FormData();
+        body.append("file", file);
+        body.append("workspaceId", workspaceId);
+        const res = await fetch("/api/documents/upload", {
+          method: "POST",
+          body,
+        });
+        data = await res.json().catch(() => ({}));
+        if (res.status === 413 || data.code === "USE_SIGNED_UPLOAD") {
+          data = await uploadViaSigned(file);
+        } else if (!res.ok && res.status !== 202) {
+          throw new Error(
+            typeof data.error === "string" ? data.error : `Upload failed (${res.status})`,
+          );
+        }
+      }
+
       setMessage(
-        data.message ??
-          "Uploaded. Indexing in background — watch status below.",
+        typeof data.message === "string"
+          ? data.message
+          : "Uploaded. Indexing in background — watch status below.",
       );
       setFile(null);
       await load();
-    } catch {
-      setError("Upload network error — try again on Wi‑Fi");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload network error — try Wi‑Fi");
     } finally {
       setLoading(false);
     }
@@ -88,10 +161,10 @@ export default function DocumentsPage() {
         <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
           ← Workspace
         </Link>
-        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Knowledge library</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Documents</h2>
         <p className="mt-2 text-sm text-muted">
-          Upload official PDFs. We extract text, chunk, embed, and index them for
-          grounded mentor answers. On iPhone use a PDF (Files → Share as PDF).
+          Upload official PDFs for Memory + mentor grounding. Files over 4MB use
+          direct storage upload. On iPhone: Files → Share as PDF.
         </p>
       </div>
 
@@ -105,6 +178,12 @@ export default function DocumentsPage() {
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full text-sm"
         />
+        {file ? (
+          <p className="text-xs text-muted">
+            {file.name} · {(file.size / (1024 * 1024)).toFixed(2)} MB
+            {file.size > MULTIPART_MAX ? " · direct upload" : ""}
+          </p>
+        ) : null}
         <button
           type="submit"
           disabled={!file || loading}

@@ -66,20 +66,12 @@ export default function InterviewPage() {
   async function loadMeta() {
     setMetaLoading(true);
     try {
-      const [sRes, cRes, lRes, stRes] = await Promise.all([
-        fetch(`/api/interview?workspaceId=${workspaceId}`),
-        fetch(`/api/interview?workspaceId=${workspaceId}&view=checklist`),
-        fetch(`/api/interview?workspaceId=${workspaceId}&view=library`),
-        fetch(`/api/interview?workspaceId=${workspaceId}&view=stories`),
-      ]);
-      const sData = await sRes.json();
-      const cData = await cRes.json();
-      const lData = await lRes.json();
-      const stData = await stRes.json();
-      setSessions(sData.sessions ?? []);
-      setChecklist(cData.checklist ?? null);
-      setLibrary(lData.library ?? []);
-      setStories(stData.stories ?? []);
+      const res = await fetch(`/api/interview?workspaceId=${workspaceId}&view=hub`);
+      const data = await res.json().catch(() => ({}));
+      setSessions(data.sessions ?? []);
+      setChecklist(data.checklist ?? null);
+      setLibrary(data.library ?? []);
+      setStories(data.stories ?? []);
     } finally {
       setMetaLoading(false);
     }
@@ -100,6 +92,7 @@ export default function InterviewPage() {
     const q = new URLSearchParams({
       lang: language,
       mode: judgeMode,
+      consent: "1",
     });
     router.push(`/workspace/${workspaceId}/interview/live?${q.toString()}`);
   }

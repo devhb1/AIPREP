@@ -13,6 +13,36 @@ type InterviewLanguage = "en" | "hi" | "mix";
 
 const FILLER_RE = /\b(um+|uh+|erm+|like|you know|अं+|आ+|मतलब)\b/gi;
 
+async function readJsonResponse(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) {
+    throw new Error(
+      res.status === 401
+        ? "Session expired — sign in again."
+        : `Server returned empty response (${res.status}). Try again.`,
+    );
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      `Server error (${res.status}): ${text.slice(0, 180) || "non-JSON response"}`,
+    );
+  }
+}
+
+function errorMessageFromBody(data: Record<string, unknown>, fallback: string) {
+  if (typeof data.error === "string") return data.error;
+  if (data.error && typeof data.error === "object") {
+    try {
+      return JSON.stringify(data.error).slice(0, 240);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 export default function LiveVoiceInterviewPage() {
   const params = useParams<{ id: string }>();
   const workspaceId = params.id;
@@ -45,6 +75,7 @@ export default function LiveVoiceInterviewPage() {
     if (lang === "en" || lang === "hi" || lang === "mix") setLanguage(lang);
     const mode = searchParams.get("mode");
     if (mode === "easy" || mode === "normal" || mode === "strict") setJudgeMode(mode);
+    if (searchParams.get("consent") === "1") setConsent(true);
   }, [searchParams]);
 
   useEffect(() => {
@@ -160,18 +191,22 @@ export default function LiveVoiceInterviewPage() {
           recordingConsent: true,
         }),
       });
-      const bootData = await boot.json();
+      const bootData = await readJsonResponse(boot);
       if (!boot.ok) {
-        throw new Error(
-          typeof bootData.error === "string"
-            ? bootData.error
-            : "Failed to start voice session",
-        );
+        throw new Error(errorMessageFromBody(bootData, "Failed to start voice session"));
       }
 
-      setSessionId(bootData.session.id);
-      const clientSecret = bootData.realtime.clientSecret as string;
-      const model = bootData.realtime.model as string;
+      const session = bootData.session as { id?: string } | undefined;
+      const realtime = bootData.realtime as
+        | { clientSecret?: string; model?: string }
+        | undefined;
+      if (!session?.id || !realtime?.clientSecret || !realtime?.model) {
+        throw new Error("Invalid voice start response from server.");
+      }
+
+      setSessionId(session.id);
+      const clientSecret = realtime.clientSecret;
+      const model = realtime.model;
 
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
@@ -268,11 +303,11 @@ export default function LiveVoiceInterviewPage() {
           speechMetrics: metrics,
         }),
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       if (!res.ok) {
-        throw new Error(data.error ?? "Failed to finalize voice interview");
+        throw new Error(errorMessageFromBody(data, "Failed to finalize voice interview"));
       }
-      setReport(data.report ?? null);
+      setReport((data.report as ScorecardReport) ?? null);
       setStatus("done");
       const finishedId = sessionId;
       setSessionId(null);

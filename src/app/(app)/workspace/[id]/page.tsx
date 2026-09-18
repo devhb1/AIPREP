@@ -1,12 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth/session";
-import { db } from "@/lib/db";
-import { workspaces } from "@/lib/db/schema";
-import { formatDate, formatDaysRemaining, daysUntil } from "@/lib/utils";
-import { computeNextBestAction } from "@/lib/planning/planner";
-import { sql } from "@/lib/db";
+import { formatDate, formatDaysRemaining } from "@/lib/utils";
+import { getWorkspaceBootstrap } from "@/lib/workspaces/bootstrap";
 import { WorkspaceChipNav } from "@/components/workspace-nav";
 
 type Props = { params: Promise<{ id: string }> };
@@ -16,37 +12,10 @@ export default async function WorkspacePage({ params }: Props) {
   if (!user) redirect("/login");
   const { id } = await params;
 
-  const [workspace] = await db
-    .select()
-    .from(workspaces)
-    .where(and(eq(workspaces.id, id), eq(workspaces.userId, user.id)))
-    .limit(1);
-  if (!workspace) notFound();
+  const data = await getWorkspaceBootstrap({ workspaceId: id, userId: user.id });
+  if (!data) notFound();
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
-  const [docStats, spendRows, nextBestAction] = await Promise.all([
-    sql<{ total: number; ready: number; pending: number }[]>`
-      select
-        count(*)::int as total,
-        coalesce(sum(case when status = 'ready' then 1 else 0 end), 0)::int as ready,
-        coalesce(sum(case when status in ('uploaded','processing','queued') then 1 else 0 end), 0)::int as pending
-      from documents
-      where workspace_id = ${id}::uuid
-    `,
-    sql<{ spend: number }[]>`
-      select coalesce(sum(estimated_cost_usd), 0)::float as spend
-      from ai_usage_events
-      where workspace_id = ${id}::uuid and created_at >= ${start.toISOString()}::timestamptz
-    `,
-    computeNextBestAction({ workspaceId: id, userId: user.id }),
-  ]);
-
-  const days = daysUntil(workspace.interviewDate ?? workspace.examDate);
-  const readyDocs = Number(docStats[0]?.ready ?? 0);
-  const docTotal = Number(docStats[0]?.total ?? 0);
-  const todaySpend = Number(spendRows[0]?.spend ?? 0);
+  const { workspace, nextBestAction, stats } = data;
   const actionHref = `/workspace/${id}/${nextBestAction.href}`;
 
   return (
@@ -65,7 +34,7 @@ export default async function WorkspacePage({ params }: Props) {
         <WorkspaceChipNav workspaceId={id} />
       </div>
 
-      <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
+      <section className="rounded-2xl border border-accent/30 bg-panel p-5 sm:p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
           Your next best action
         </p>
@@ -87,10 +56,10 @@ export default async function WorkspacePage({ params }: Props) {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ["Days remaining", formatDaysRemaining(days)],
-          ["Documents ready", String(readyDocs)],
-          ["Docs total", String(docTotal)],
-          ["Today AI $", todaySpend.toFixed(4)],
+          ["Days remaining", formatDaysRemaining(stats.daysRemaining)],
+          ["Documents ready", String(stats.readyDocuments)],
+          ["Docs total", String(stats.documentCount)],
+          ["Today AI $", stats.todaySpendUsd.toFixed(4)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
@@ -99,8 +68,9 @@ export default async function WorkspacePage({ params }: Props) {
         ))}
       </section>
 
-      <p className="text-xs text-muted">
-        iPhone tip: Safari → Share → Add to Home Screen for an app-like shortcut.
+      <p className="text-sm text-muted">
+        Flow: Documents → Research → approve in Memory → Plan intake → live voice
+        interview.
       </p>
     </main>
   );

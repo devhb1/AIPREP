@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 type Topic = {
   id: string;
@@ -50,6 +50,7 @@ const AREA_OPTIONS = [
 export default function PlanPage() {
   const params = useParams<{ id: string }>();
   const workspaceId = params.id;
+  const router = useRouter();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -83,6 +84,15 @@ export default function PlanPage() {
       setWeakAreas(data.intake.weakAreas ?? []);
       setStrongAreas(data.intake.strongAreas ?? []);
       setGoals(data.intake.goals ?? goals);
+    } else if (data.workspace?.interviewDate) {
+      const remaining = Math.ceil(
+        (new Date(data.workspace.interviewDate).getTime() - Date.now()) /
+          (1000 * 60 * 60 * 24),
+      );
+      if (remaining > 0 && remaining <= 120) setDaysUntilInterview(remaining);
+      if (data.workspace.dailyStudyHours) {
+        setHoursPerDay(Number(data.workspace.dailyStudyHours));
+      }
     }
     setBooting(false);
   }
@@ -122,6 +132,7 @@ export default function PlanPage() {
     }
     setShowWizard(false);
     await load();
+    router.push(`/workspace/${workspaceId}/today`);
   }
 
   async function generate() {
@@ -156,7 +167,9 @@ export default function PlanPage() {
       title: "When is your interview?",
       body: (
         <label className="block text-sm">
-          <span className="mb-1 block text-muted">Days until interview</span>
+          <span className="mb-1 block text-muted">
+            Days until interview (updates your workspace interview date)
+          </span>
           <input
             type="number"
             min={1}

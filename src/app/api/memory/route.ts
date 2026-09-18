@@ -47,24 +47,38 @@ export async function GET(request: Request) {
         inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
       ),
     )
-    .orderBy(desc(claims.createdAt));
+    .orderBy(desc(claims.createdAt))
+    .limit(40);
 
-  const claimsWithSources = await Promise.all(
-    inboxClaims.map(async (claim) => {
-      const links = await db
-        .select({
-          title: sources.title,
-          url: sources.url,
-          sourceType: sources.sourceType,
-          qualityScore: sources.qualityScore,
-          excerpt: claimSources.excerpt,
-        })
-        .from(claimSources)
-        .leftJoin(sources, eq(sources.id, claimSources.sourceId))
-        .where(eq(claimSources.claimId, claim.id));
-      return { ...claim, sources: links, kind: "claim" as const };
-    }),
-  );
+  const claimIds = inboxClaims.map((c) => c.id);
+  const allSourceLinks =
+    claimIds.length === 0
+      ? []
+      : await db
+          .select({
+            claimId: claimSources.claimId,
+            title: sources.title,
+            url: sources.url,
+            sourceType: sources.sourceType,
+            qualityScore: sources.qualityScore,
+            excerpt: claimSources.excerpt,
+          })
+          .from(claimSources)
+          .leftJoin(sources, eq(sources.id, claimSources.sourceId))
+          .where(inArray(claimSources.claimId, claimIds));
+
+  const sourcesByClaim = new Map<string, typeof allSourceLinks>();
+  for (const link of allSourceLinks) {
+    const list = sourcesByClaim.get(link.claimId) ?? [];
+    list.push(link);
+    sourcesByClaim.set(link.claimId, list);
+  }
+
+  const claimsWithSources = inboxClaims.map((claim) => ({
+    ...claim,
+    sources: sourcesByClaim.get(claim.id) ?? [],
+    kind: "claim" as const,
+  }));
 
   const memory = await db
     .select()

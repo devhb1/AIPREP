@@ -31,13 +31,18 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
+  const isApi = path.startsWith("/api/");
   const isPublic =
     isAuthPage ||
     path.startsWith("/auth") ||
     path === "/" ||
-    path.startsWith("/api/health");
+    path.startsWith("/api/health") ||
+    path.startsWith("/api/jobs");
 
-  if (!user && !isPublic && !path.startsWith("/api/jobs")) {
+  if (!user && !isPublic) {
+    if (isApi) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
