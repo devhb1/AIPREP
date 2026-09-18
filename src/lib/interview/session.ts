@@ -59,6 +59,7 @@ const reportSchema = z.object({
 export async function ensureInterviewChecklist(params: {
   workspaceId: string;
   userId: string;
+  useAi?: boolean;
 }) {
   const existing = await db
     .select()
@@ -79,6 +80,7 @@ export async function ensureInterviewChecklist(params: {
     .limit(20);
 
   const evidence = trusted.map((m) => m.content).join("\n");
+  // Fast path for page load: defaults only (no OpenAI). AI refresh via action=checklist.
   const defaults = [
     "Original certificates and photocopies",
     "Photo ID / Aadhaar",
@@ -96,7 +98,7 @@ export async function ensureInterviewChecklist(params: {
     done: false,
   }));
 
-  if (evidence.trim()) {
+  if (params.useAi && evidence.trim()) {
     const result = await chatCompletion({
       model: MODELS.fast,
       system: interviewChecklistSystem,
@@ -232,7 +234,7 @@ export async function answerInterviewTurn(params: {
   const shouldSuggestEnd = elapsedTurns >= 6;
 
   const result = await chatCompletion({
-    model: MODELS.reasoning,
+    model: MODELS.fast,
     system: `${interviewFollowupSystem(session.judgeMode)}
 ${judgeInstructions(session.judgeMode as JudgeMode)}`,
     user: `Turn count (interviewer asks so far): ${elapsedTurns}
@@ -330,7 +332,7 @@ export async function endInterviewSession(params: {
     .join("\n");
 
   const result = await chatCompletion({
-    model: MODELS.reasoning,
+    model: MODELS.fast,
     system: interviewEvalSystem,
     user: `Judge mode: ${session.judgeMode}\n\nTRANSCRIPT:\n${transcript.slice(0, 14000)}`,
     userId: params.userId,

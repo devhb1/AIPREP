@@ -34,6 +34,12 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.safe-pad {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
 
 h1,

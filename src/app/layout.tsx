@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Libre_Franklin, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
@@ -16,7 +16,27 @@ const sans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "AIPREP — KVS PRT Interview Mentor",
   description:
-    "Personal AI exam and interview preparation operating system. Phase 1: documents, memory foundation, and grounded mentor chat.",
+    "Personal AI exam and interview preparation OS for KVS PRT Interview 2026.",
+  applicationName: "AIPREP",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "AIPREP",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f766e",
 };
 
 export default function RootLayout({

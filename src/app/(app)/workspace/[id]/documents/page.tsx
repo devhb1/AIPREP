@@ -23,14 +23,22 @@ export default function DocumentsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch(`/api/workspaces/${workspaceId}`);
-    const data = await res.json();
-    setDocs(data.documents ?? []);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Could not load documents");
+        return;
+      }
+      setDocs(data.documents ?? []);
+    } catch {
+      setError("Network error loading documents");
+    }
   }
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 5000);
+    const timer = setInterval(() => void load(), 3000);
     return () => clearInterval(timer);
   }, [workspaceId]);
 
@@ -40,73 +48,78 @@ export default function DocumentsPage() {
     setLoading(true);
     setError(null);
     setMessage(null);
-    const body = new FormData();
-    body.append("file", file);
-    body.append("workspaceId", workspaceId);
-    const res = await fetch("/api/documents/upload", {
-      method: "POST",
-      body,
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok && res.status !== 202) {
-      setError(data.error ?? "Upload failed");
-      return;
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("workspaceId", workspaceId);
+      const res = await fetch("/api/documents/upload", {
+        method: "POST",
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 202) {
+        setError(data.error ?? "Upload failed");
+        return;
+      }
+      setMessage(
+        data.message ??
+          "Uploaded. Indexing in background — watch status below.",
+      );
+      setFile(null);
+      await load();
+    } catch {
+      setError("Upload network error — try again on Wi‑Fi");
+    } finally {
+      setLoading(false);
     }
-    if (data.warning) {
-      setMessage(`Uploaded with warning: ${data.warning}`);
-    } else {
-      setMessage("Uploaded and indexed.");
-    }
-    setFile(null);
-    await load();
   }
 
   async function retry(docId: string) {
     setError(null);
     const res = await fetch(`/api/documents/${docId}`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Retry failed");
-    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setError(data.error ?? "Retry failed");
     await load();
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6">
+    <main className="mx-auto max-w-4xl space-y-6 pb-24">
       <div>
         <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
           ← Workspace
         </Link>
-        <h2 className="mt-2 text-4xl text-ink">Knowledge library</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Knowledge library</h2>
         <p className="mt-2 text-sm text-muted">
-          Upload official PDFs. Phase 1 extracts text, chunks, embeds, and indexes
-          them for grounded mentor answers.
+          Upload official PDFs. We extract text, chunk, embed, and index them for
+          grounded mentor answers. On iPhone use a PDF (Files → Share as PDF).
         </p>
       </div>
 
       <form
         onSubmit={onUpload}
-        className="rounded-2xl border border-line bg-panel p-5 space-y-4"
+        className="space-y-4 rounded-2xl border border-line bg-panel p-5"
       >
         <input
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,.pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full text-sm"
         />
         <button
           type="submit"
           disabled={!file || loading}
-          className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
         >
-          {loading ? "Uploading & indexing…" : "Upload PDF"}
+          {loading ? "Uploading…" : "Upload PDF"}
         </button>
         {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
         {message ? <p className="text-sm text-[var(--ok)]">{message}</p> : null}
       </form>
 
       <section className="space-y-3">
+        {docs.length === 0 ? (
+          <p className="text-sm text-muted">No documents yet.</p>
+        ) : null}
         {docs.map((doc) => (
           <div
             key={doc.id}
@@ -117,8 +130,14 @@ export default function DocumentsPage() {
                 <p className="text-lg font-medium text-ink">{doc.title}</p>
                 <p className="text-muted">{doc.fileName}</p>
                 <p className="mt-1 text-muted">
-                  Pages: {doc.pageCount ?? "—"} · Status: {doc.status}
+                  Pages: {doc.pageCount ?? "—"} · Status:{" "}
+                  <span className="font-semibold text-ink">{doc.status}</span>
                 </p>
+                {doc.status === "queued" || doc.status === "processing" ? (
+                  <p className="mt-1 text-xs text-accent">
+                    Indexing under the hood (extract → chunk → embed)…
+                  </p>
+                ) : null}
                 {doc.errorMessage ? (
                   <p className="mt-1 text-[var(--danger)]">{doc.errorMessage}</p>
                 ) : null}
@@ -126,7 +145,7 @@ export default function DocumentsPage() {
               {doc.status === "failed" ? (
                 <button
                   onClick={() => void retry(doc.id)}
-                  className="rounded-lg border border-line px-3 py-1.5 font-semibold"
+                  className="min-h-11 rounded-lg border border-line px-3 py-2 font-semibold"
                 >
                   Retry
                 </button>

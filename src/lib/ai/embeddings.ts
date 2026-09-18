@@ -10,27 +10,45 @@ export async function embedTexts(params: {
   feature?: string;
 }) {
   const openai = getOpenAI();
-  const embeddings: number[][] = [];
+  const embeddings: Array<number[] | null> = new Array(params.texts.length).fill(null);
   let cachedCount = 0;
   let inputTokens = 0;
 
-  for (const text of params.texts) {
+  const pending: Array<{ index: number; text: string }> = [];
+
+  for (let i = 0; i < params.texts.length; i += 1) {
+    const text = params.texts[i]!;
     const key = cacheKey(["ai", "embed", MODELS.embedding, hashContent(text)]);
     const cached = await cacheGet<number[]>(key);
     if (cached) {
-      embeddings.push(cached);
+      embeddings[i] = cached;
       cachedCount += 1;
-      continue;
+    } else {
+      pending.push({ index: i, text });
     }
+  }
 
+  // Batch uncached texts (much faster than one request per chunk).
+  const BATCH = 64;
+  for (let offset = 0; offset < pending.length; offset += BATCH) {
+    const batch = pending.slice(offset, offset + BATCH);
     const response = await openai.embeddings.create({
       model: MODELS.embedding,
-      input: text,
+      input: batch.map((b) => b.text),
     });
-    const vector = response.data[0]?.embedding ?? [];
-    embeddings.push(vector);
-    inputTokens += response.usage?.total_tokens ?? Math.ceil(text.length / 4);
-    await cacheSet(key, vector, 60 * 60 * 24 * 7);
+    inputTokens += response.usage?.total_tokens ?? 0;
+    for (let j = 0; j < batch.length; j += 1) {
+      const vector = response.data[j]?.embedding ?? [];
+      const item = batch[j]!;
+      embeddings[item.index] = vector;
+      const key = cacheKey([
+        "ai",
+        "embed",
+        MODELS.embedding,
+        hashContent(item.text),
+      ]);
+      await cacheSet(key, vector, 60 * 60 * 24 * 7);
+    }
   }
 
   await logAiUsage({
@@ -44,7 +62,7 @@ export async function embedTexts(params: {
     metadata: { texts: params.texts.length, cachedCount },
   });
 
-  return embeddings;
+  return embeddings.map((v) => v ?? []);
 }
 
 export async function embedQuery(params: {

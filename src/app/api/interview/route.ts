@@ -167,13 +167,23 @@ export async function POST(request: Request) {
         { status: 429 },
       );
     }
-    const result = await startInterviewSession({
-      workspaceId,
-      userId: user.id,
-      judgeMode: (parsed.data.judgeMode as JudgeMode) ?? "normal",
-      targetMinutes: parsed.data.targetMinutes,
-    });
-    return NextResponse.json(result);
+    try {
+      const result = await startInterviewSession({
+        workspaceId,
+        userId: user.id,
+        judgeMode: (parsed.data.judgeMode as JudgeMode) ?? "normal",
+        targetMinutes: parsed.data.targetMinutes,
+      });
+      return NextResponse.json(result);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Could not start interview",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   if (!parsed.data.sessionId) {
@@ -192,19 +202,39 @@ export async function POST(request: Request) {
         { status: 429 },
       );
     }
-    const result = await answerInterviewTurn({
+    try {
+      const result = await answerInterviewTurn({
+        sessionId: parsed.data.sessionId,
+        workspaceId,
+        userId: user.id,
+        answer: parsed.data.answer,
+      });
+      return NextResponse.json(result);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Could not process answer",
+        },
+        { status: 500 },
+      );
+    }
+  }
+
+  try {
+    const result = await endInterviewSession({
       sessionId: parsed.data.sessionId,
       workspaceId,
       userId: user.id,
-      answer: parsed.data.answer,
     });
     return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Could not end interview",
+      },
+      { status: 500 },
+    );
   }
-
-  const result = await endInterviewSession({
-    sessionId: parsed.data.sessionId,
-    workspaceId,
-    userId: user.id,
-  });
-  return NextResponse.json(result);
 }

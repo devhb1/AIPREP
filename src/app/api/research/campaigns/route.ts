@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { NextResponse, after } from "next/server";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -15,11 +15,15 @@ import {
 import { rateLimit } from "@/lib/rate-limit";
 import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
+export const maxDuration = 120;
+
 export async function GET(request: Request) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const workspaceId = new URL(request.url).searchParams.get("workspaceId");
+  const { searchParams } = new URL(request.url);
+  const workspaceId = searchParams.get("workspaceId");
+  const campaignId = searchParams.get("campaignId");
   if (!workspaceId) {
     return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
   }
@@ -31,13 +35,57 @@ export async function GET(request: Request) {
     .limit(1);
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  if (campaignId) {
+    const [campaign] = await db
+      .select()
+      .from(researchCampaigns)
+      .where(
+        and(
+          eq(researchCampaigns.id, campaignId),
+          eq(researchCampaigns.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const queries = await db
+      .select()
+      .from(researchQueries)
+      .where(eq(researchQueries.campaignId, campaignId));
+    return NextResponse.json({ campaign, queries });
+  }
+
   const campaigns = await db
     .select()
     .from(researchCampaigns)
     .where(eq(researchCampaigns.workspaceId, workspaceId))
-    .orderBy(desc(researchCampaigns.createdAt));
+    .orderBy(desc(researchCampaigns.createdAt))
+    .limit(20);
 
-  return NextResponse.json({ campaigns });
+  const ids = campaigns.map((c) => c.id);
+  const queries =
+    ids.length === 0
+      ? []
+      : await db
+          .select()
+          .from(researchQueries)
+          .where(inArray(researchQueries.campaignId, ids));
+
+  const byCampaign = new Map<string, typeof queries>();
+  for (const q of queries) {
+    const list = byCampaign.get(q.campaignId) ?? [];
+    list.push(q);
+    byCampaign.set(q.campaignId, list);
+  }
+
+  return NextResponse.json({
+    campaigns: campaigns.map((c) => ({
+      ...c,
+      queries: byCampaign.get(c.id) ?? [],
+      progressLog:
+        ((c.metadata as { progressLog?: Array<{ at: string; message: string }> } | null)
+          ?.progressLog ?? []),
+    })),
+  });
 }
 
 const createSchema = z.object({
@@ -65,7 +113,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { workspaceId, depth = "standard" } = parsed.data;
+  const { workspaceId, depth = "quick" } = parsed.data;
   const [workspace] = await db
     .select()
     .from(workspaces)
@@ -92,12 +140,21 @@ export async function POST(request: Request) {
       topic,
       depth,
       status: "queued",
+      metadata: {
+        progressLog: [
+          {
+            at: new Date().toISOString(),
+            message: "Campaign queued — starting web research shortly.",
+          },
+        ],
+      },
     })
     .returning();
 
   const queries = buildKvsResearchQueries(topic);
+  const limit = depth === "quick" ? 2 : depth === "deep" ? 6 : 4;
   await db.insert(researchQueries).values(
-    queries.map((q) => ({
+    queries.slice(0, limit).map((q) => ({
       campaignId: campaign.id,
       cluster: q.cluster,
       query: q.query,
@@ -105,21 +162,19 @@ export async function POST(request: Request) {
     })),
   );
 
-  try {
-    const result = await runResearchCampaign(campaign.id);
-    const [fresh] = await db
-      .select()
-      .from(researchCampaigns)
-      .where(eq(researchCampaigns.id, campaign.id))
-      .limit(1);
-    return NextResponse.json({ campaign: fresh, result });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        campaign,
-        error: error instanceof Error ? error.message : "Research failed",
-      },
-      { status: 202 },
-    );
-  }
+  after(async () => {
+    try {
+      await runResearchCampaign(campaign.id);
+    } catch (error) {
+      console.error("research.campaign failed", campaign.id, error);
+    }
+  });
+
+  return NextResponse.json(
+    {
+      campaign,
+      message: "Research started in background. Watch live progress below.",
+    },
+    { status: 202 },
+  );
 }

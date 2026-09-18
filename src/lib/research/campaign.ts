@@ -73,10 +73,29 @@ export async function runResearchCampaign(campaignId: string) {
     .limit(1);
   if (!workspace) throw new Error("Workspace not found");
 
+  async function pushProgress(message: string) {
+    const [fresh] = await db
+      .select({ metadata: researchCampaigns.metadata })
+      .from(researchCampaigns)
+      .where(eq(researchCampaigns.id, campaignId))
+      .limit(1);
+    const meta = (fresh?.metadata as Record<string, unknown> | null) ?? {};
+    const log = Array.isArray(meta.progressLog) ? [...meta.progressLog] : [];
+    log.push({ at: new Date().toISOString(), message });
+    await db
+      .update(researchCampaigns)
+      .set({
+        metadata: { ...meta, progressLog: log.slice(-40) },
+        updatedAt: new Date(),
+      })
+      .where(eq(researchCampaigns.id, campaignId));
+  }
+
   await db
     .update(researchCampaigns)
     .set({ status: "running", updatedAt: new Date(), errorMessage: null })
     .where(eq(researchCampaigns.id, campaignId));
+  await pushProgress("Campaign running — searching public sources.");
 
   try {
     const queryRows = await db
@@ -91,11 +110,14 @@ export async function runResearchCampaign(campaignId: string) {
       campaign.depth === "quick" ? 2 : campaign.depth === "deep" ? 6 : 4;
     const selected = queryRows.slice(0, limit);
 
-    for (const queryRow of selected) {
+    for (const [index, queryRow] of selected.entries()) {
       await db
         .update(researchQueries)
         .set({ status: "running" })
         .where(eq(researchQueries.id, queryRow.id));
+      await pushProgress(
+        `Query ${index + 1}/${selected.length} (${queryRow.cluster}): ${queryRow.query.slice(0, 90)}…`,
+      );
 
       const research = await webResearch({
         query: queryRow.query,
@@ -105,6 +127,9 @@ export async function runResearchCampaign(campaignId: string) {
       });
 
       notes.push(`### ${queryRow.cluster}\nQuery: ${queryRow.query}\n${research.text}`);
+      await pushProgress(
+        `Query ${index + 1} done — ${research.hits.length} hits${research.cached ? " (cache)" : ""}.`,
+      );
 
       let firstSourceId: string | null = null;
       for (const hit of research.hits.slice(0, 5)) {
@@ -157,6 +182,8 @@ export async function runResearchCampaign(campaignId: string) {
         .set({ status: "completed" })
         .where(eq(researchQueries.id, queryRow.id));
     }
+
+    await pushProgress("Extracting candidate claims from research notes…");
 
     const extraction = await chatCompletion({
       model: MODELS.fast,
@@ -245,6 +272,14 @@ ${notes.join("\n\n").slice(0, 24000)}`,
     }
 
     const summary = `Found ${urlToSourceId.size || notes.length} source notes and extracted ${createdClaimIds.length} candidate claims for review.`;
+    await pushProgress(`Done — ${createdClaimIds.length} claims ready in inbox.`);
+
+    const [latest] = await db
+      .select({ metadata: researchCampaigns.metadata })
+      .from(researchCampaigns)
+      .where(eq(researchCampaigns.id, campaignId))
+      .limit(1);
+    const prevMeta = (latest?.metadata as Record<string, unknown> | null) ?? {};
 
     await db
       .update(researchCampaigns)
@@ -254,6 +289,7 @@ ${notes.join("\n\n").slice(0, 24000)}`,
         updatedAt: new Date(),
         finishedAt: new Date(),
         metadata: {
+          ...prevMeta,
           queryCount: selected.length,
           claimCount: createdClaimIds.length,
           sourceCount: urlToSourceId.size,
@@ -264,6 +300,7 @@ ${notes.join("\n\n").slice(0, 24000)}`,
     return { claimCount: createdClaimIds.length, summary };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Research failed";
+    await pushProgress(`Failed: ${message}`);
     await db
       .update(researchCampaigns)
       .set({

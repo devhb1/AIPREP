@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents, jobs, workspaces } from "@/lib/db/schema";
@@ -7,6 +7,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueJob } from "@/lib/cache/ai-cache";
 import { rateLimit } from "@/lib/rate-limit";
 import { processDocumentJob } from "@/lib/documents/process";
+
+export const maxDuration = 60;
+
+function isPdfUpload(file: File, buffer: Buffer) {
+  const nameOk = /\.pdf$/i.test(file.name);
+  const typeOk =
+    !file.type ||
+    file.type === "application/pdf" ||
+    file.type === "application/octet-stream" ||
+    file.type === "application/x-pdf";
+  const magicOk = buffer.subarray(0, 5).toString("utf8") === "%PDF-";
+  return (nameOk && typeOk) || magicOk;
+}
 
 export async function POST(request: Request) {
   const user = await requireUser();
@@ -33,12 +46,18 @@ export async function POST(request: Request) {
     );
   }
 
-  if (file.type !== "application/pdf") {
-    return NextResponse.json({ error: "Only PDF uploads are supported in Phase 1" }, { status: 400 });
+  if (file.size > 15 * 1024 * 1024) {
+    return NextResponse.json({ error: "Max file size is 15MB" }, { status: 400 });
   }
 
-  if (file.size > 15 * 1024 * 1024) {
-    return NextResponse.json({ error: "Max file size is 15MB in Phase 1" }, { status: 400 });
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  if (!isPdfUpload(file, buffer)) {
+    return NextResponse.json(
+      { error: "Only PDF uploads are supported. On iPhone, export/share as PDF." },
+      { status: 400 },
+    );
   }
 
   const [workspace] = await db
@@ -51,20 +70,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
   const storagePath = `${user.id}/${workspaceId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
   const admin = createAdminClient();
   const { error: uploadError } = await admin.storage
     .from("documents")
     .upload(storagePath, buffer, {
-      contentType: file.type,
+      contentType: "application/pdf",
       upsert: false,
     });
 
   if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: `Storage upload failed: ${uploadError.message}. Ensure private bucket "documents" exists.`,
+      },
+      { status: 500 },
+    );
   }
 
   const [doc] = await db
@@ -74,7 +96,7 @@ export async function POST(request: Request) {
       userId: user.id,
       title: file.name.replace(/\.pdf$/i, ""),
       fileName: file.name,
-      mimeType: file.type,
+      mimeType: "application/pdf",
       storagePath,
       byteSize: file.size,
       status: "queued",
@@ -95,28 +117,21 @@ export async function POST(request: Request) {
 
   await enqueueJob("queue:document.process", job.id);
 
-  // Process inline for Phase 1 reliability on free tiers (also queued for retry).
-  try {
-    await processDocumentJob(job.id);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        document: doc,
-        job,
-        warning:
-          error instanceof Error
-            ? error.message
-            : "Upload saved but processing failed. Retry from documents page.",
-      },
-      { status: 202 },
-    );
-  }
+  // Return fast; index in background so iPhone/Vercel don't hang on embeds.
+  after(async () => {
+    try {
+      await processDocumentJob(job.id);
+    } catch (error) {
+      console.error("document.process failed", job.id, error);
+    }
+  });
 
-  const [fresh] = await db
-    .select()
-    .from(documents)
-    .where(eq(documents.id, doc.id))
-    .limit(1);
-
-  return NextResponse.json({ document: fresh, job });
+  return NextResponse.json(
+    {
+      document: doc,
+      job,
+      message: "Uploaded. Indexing in background — status will update to ready.",
+    },
+    { status: 202 },
+  );
 }

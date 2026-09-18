@@ -209,32 +209,40 @@ export default function InterviewPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl space-y-8">
+    <main className="mx-auto max-w-5xl space-y-6 pb-24">
       <div>
         <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
           ← Workspace
         </Link>
-        <h2 className="mt-2 text-4xl text-ink">Interview coach</h2>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Interview coach</h2>
         <p className="mt-2 text-sm text-muted">
-          Text mock panel with Easy / Normal / Strict judges, checklist, answer
-          library, and post-mock drills.{" "}
-          <Link className="font-semibold text-accent" href={`/workspace/${workspaceId}/interview/live`}>
-            Open live voice interview →
-          </Link>
+          Practice answers in text (fast). After each mock we score you, save
+          improved answers, and queue drills. Use voice for spoken practice.
         </p>
       </div>
 
+      <Link
+        href={`/workspace/${workspaceId}/interview/live`}
+        className="block rounded-2xl border border-accent/40 bg-accent-soft/50 p-4"
+      >
+        <p className="text-sm font-semibold text-accent">Live voice interview</p>
+        <p className="mt-1 text-sm text-muted">
+          Talk with the panel on mic → transcript → evaluate. Needs Safari mic
+          permission + HTTPS. Tap to open.
+        </p>
+      </Link>
+
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
-      <section className="rounded-2xl border border-line bg-panel p-5 space-y-4">
-        <h3 className="text-xl text-ink">Start mock interview</h3>
+      <section className="space-y-4 rounded-2xl border border-line bg-panel p-5">
+        <h3 className="text-xl text-ink">Text mock interview</h3>
         <label className="block text-sm">
           <span className="mb-1 block text-muted">Judge mode</span>
           <select
             value={judgeMode}
             onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-            className="rounded-xl border border-line bg-white px-3 py-2"
-            disabled={Boolean(activeSessionId)}
+            className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2 sm:w-auto"
+            disabled={Boolean(activeSessionId) || loading}
           >
             <option value="easy">Easy</option>
             <option value="normal">Normal</option>
@@ -245,7 +253,7 @@ export default function InterviewPage() {
           <button
             onClick={() => void startMock()}
             disabled={loading}
-            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            className="min-h-11 w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
           >
             {loading ? "Starting…" : "Start text mock"}
           </button>
@@ -253,9 +261,9 @@ export default function InterviewPage() {
           <button
             onClick={() => void endMock()}
             disabled={loading}
-            className="rounded-xl border border-line px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            className="min-h-11 w-full rounded-xl border border-line px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:w-auto"
           >
-            End & evaluate
+            {loading ? "Evaluating…" : "End & evaluate"}
           </button>
         )}
       </section>
@@ -284,20 +292,21 @@ export default function InterviewPage() {
               </div>
             ))}
           </div>
-          <form onSubmit={sendAnswer} className="flex gap-2">
+          <form onSubmit={sendAnswer} className="flex flex-col gap-2 sm:flex-row">
             <textarea
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               rows={3}
               placeholder="Answer as you would in the interview…"
-              className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-sm outline-none ring-accent focus:ring-2"
+              className="min-h-24 flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-sm outline-none ring-accent focus:ring-2"
+              disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || !answer.trim()}
-              className="self-end rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              className="min-h-11 self-stretch rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 sm:self-end"
             >
-              Send
+              {loading ? "Thinking…" : "Send"}
             </button>
           </form>
         </section>
