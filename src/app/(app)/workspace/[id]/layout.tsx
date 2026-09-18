@@ -1,4 +1,4 @@
-import { WorkspaceMobileNav } from "@/components/workspace-nav";
+import { WorkspaceMobileNav, WorkspaceRail } from "@/components/workspace-nav";
 
 type Props = {
   children: React.ReactNode;
@@ -8,9 +8,12 @@ type Props = {
 export default async function WorkspaceSectionLayout({ children, params }: Props) {
   const { id } = await params;
   return (
-    <>
-      {children}
+    <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
+      <aside className="sticky top-6 hidden self-start lg:block">
+        <WorkspaceRail workspaceId={id} />
+      </aside>
+      <div>{children}</div>
       <WorkspaceMobileNav workspaceId={id} />
-    </>
+    </div>
   );
 }

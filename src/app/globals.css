@@ -12,6 +12,10 @@
   --warn: #b45309;
   --danger: #b91c1c;
   --ok: #15803d;
+  --radius-card: 1rem;
+  --radius-btn: 0.75rem;
+  --space-section: 1.5rem;
+  --motion: 160ms ease-out;
 }
 
 @theme inline {
@@ -27,12 +31,14 @@
   --font-display: var(--font-libre);
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background:
-    radial-gradient(circle at 0% 0%, rgba(15, 118, 110, 0.1), transparent 34%),
-    linear-gradient(180deg, #eef2f6 0%, #e2e8f0 100%);
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-family: var(--font-sans), -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
@@ -48,4 +54,10 @@ h3,
 .display {
   font-family: var(--font-display), Georgia, serif;
   letter-spacing: -0.02em;
+}
+
+a,
+button {
+  transition: background-color var(--motion), color var(--motion),
+    border-color var(--motion), opacity var(--motion);
 }

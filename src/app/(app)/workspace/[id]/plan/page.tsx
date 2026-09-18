@@ -132,7 +132,7 @@ export default function PlanPage() {
     }
     setShowWizard(false);
     await load();
-    router.push(`/workspace/${workspaceId}/today`);
+    router.push(`/workspace/${workspaceId}`);
   }
 
   async function generate() {
@@ -386,8 +386,8 @@ export default function PlanPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xl text-ink">Tasks</h3>
-          <Link href={`/workspace/${workspaceId}/today`} className="text-sm text-accent">
-            Today view →
+          <Link href={`/workspace/${workspaceId}`} className="text-sm text-accent">
+            Home (today&apos;s tasks) →
           </Link>
         </div>
         {tasks.slice(0, 12).map((task) => (
@@ -401,6 +401,17 @@ export default function PlanPage() {
             <p className="mt-1 text-muted">{task.description}</p>
           </div>
         ))}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-panel p-5 text-sm">
+        <h3 className="text-lg text-ink">Settings</h3>
+        <p className="mt-1 text-muted">Spend caps, export, and workspace reset.</p>
+        <Link
+          href={`/workspace/${workspaceId}/settings`}
+          className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-line px-4 font-semibold"
+        >
+          Open settings →
+        </Link>
       </section>
     </main>
   );

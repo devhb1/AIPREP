@@ -1,5 +1,7 @@
 # Agents
 
+**Full repo briefing:** [`aicontext.md`](aicontext.md). **What to ship next:** [`BUILD.md`](BUILD.md). Spec scoreboard: [`PROMPT-ASK.TXT`](PROMPT-ASK.TXT).
+
 Structured AI call sites (not autonomous multi-agent swarm). All go through `src/lib/ai/*` with Redis cache + usage logging when applicable.
 
 | Agent / feature | Entry | Prompt |

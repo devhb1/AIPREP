@@ -39,6 +39,8 @@ npm run smoke
 
 | Doc | Contents |
 |---|---|
+| [BUILD.md](BUILD.md) | Locked v2 ship sequence (waves 1–5) |
+| [PROMPT-ASK.TXT](PROMPT-ASK.TXT) | Original spec with ✅ / 🟡 / ⬜ status |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System shape + trust model |
 | [AGENTS.md](AGENTS.md) | AI call sites + prompts |
 | [DATABASE.md](DATABASE.md) | Migrations + schema notes |

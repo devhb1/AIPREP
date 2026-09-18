@@ -98,7 +98,7 @@ export async function getUsageSummary(params: {
     .limit(1);
 
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 1);
+  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 0.5);
 
   return {
     todaySpendUsd: Number(todayRows[0]?.total ?? 0),
@@ -112,7 +112,7 @@ export async function getUsageSummary(params: {
       totalUsd: Number(row.total ?? 0),
       calls: Number(row.calls ?? 0),
     })),
-    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 5,
+    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 1.5,
     maxDailyVoiceSpendUsd,
   };
 }
@@ -127,7 +127,7 @@ export async function assertWithinDailyBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
 
-  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 5;
+  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 1.5;
   const redisKey = `spend:${params.workspaceId}:${startOfUtcDay().toISOString().slice(0, 10)}`;
 
   const cached = await redisSafe(async (redis) => {
@@ -165,7 +165,7 @@ export async function assertWithinVoiceBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 1);
+  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 0.5);
 
   const start = startOfUtcDay();
   const rows = await db

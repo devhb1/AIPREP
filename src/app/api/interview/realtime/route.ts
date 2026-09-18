@@ -85,6 +85,9 @@ export async function POST(request: Request) {
     if (!workspace) return jsonError("Not found", 404);
 
     if (parsed.data.action === "start") {
+      if (process.env.NEXT_PUBLIC_ENABLE_REALTIME_VOICE !== "true") {
+        return jsonError("Realtime voice is disabled for this beta.", 403);
+      }
       if (!parsed.data.recordingConsent) {
         return jsonError(
           "Recording/transcript consent is required for voice mocks.",

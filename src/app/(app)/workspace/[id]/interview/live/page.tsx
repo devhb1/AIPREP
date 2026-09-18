@@ -79,6 +79,12 @@ export default function LiveVoiceInterviewPage() {
   }, [targetMinutes]);
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ENABLE_REALTIME_VOICE !== "true") {
+      router.replace(`/workspace/${workspaceId}/interview/drill`);
+    }
+  }, [router, workspaceId]);
+
+  useEffect(() => {
     const lang = searchParams.get("lang");
     if (lang === "en" || lang === "hi" || lang === "mix") setLanguage(lang);
     const mode = searchParams.get("mode");

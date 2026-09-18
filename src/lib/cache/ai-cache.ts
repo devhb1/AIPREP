@@ -23,6 +23,21 @@ export async function cacheSet(key: string, value: unknown, ttlSeconds = 60 * 60
   }, false);
 }
 
+export async function cacheDel(key: string) {
+  await redisSafe(async (redis) => {
+    await redis.del(key);
+    return true;
+  }, false);
+}
+
+export function nbaCacheKey(workspaceId: string) {
+  return `nba:${workspaceId}`;
+}
+
+export async function invalidateNba(workspaceId: string) {
+  await cacheDel(nbaCacheKey(workspaceId));
+}
+
 export async function enqueueJob(queue: string, jobId: string) {
   await redisSafe(async (redis) => {
     await redis.lpush(queue, jobId);

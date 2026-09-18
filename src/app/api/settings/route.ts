@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     workspace,
     settings: settings ?? {
       workspaceId,
-      maxDailyAiSpendUsd: 5,
+      maxDailyAiSpendUsd: 1.5,
       maxResearchQueries: 20,
       settings: {},
     },
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
       .insert(workspaceSettings)
       .values({
         workspaceId: parsed.data.workspaceId,
-        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? 5,
+        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? 1.5,
         maxResearchQueries: parsed.data.maxResearchQueries ?? 20,
         settings: nextExtra,
       })

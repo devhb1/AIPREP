@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   description:
     "Personal AI exam and interview preparation OS for KVS PRT Interview 2026.",
   applicationName: "AIPREP",
-  appleWebApp: {
+    appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "AIPREP",
   },
   formatDetection: {

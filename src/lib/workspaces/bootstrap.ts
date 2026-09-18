@@ -1,8 +1,9 @@
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   aiUsageEvents,
   documents,
+  interviewSessions,
   workspaces,
   workspaceSettings,
 } from "@/lib/db/schema";
@@ -30,7 +31,7 @@ export async function getWorkspaceBootstrap(params: {
   start.setHours(0, 0, 0, 0);
 
   // Sequential-friendly batch: NBA already hits documents/claims; keep extras small.
-  const [docStats, spendRows, settings] = await Promise.all([
+  const [docStats, spendRows, settings, lastMock] = await Promise.all([
     db
       .select({
         total: count(),
@@ -55,6 +56,12 @@ export async function getWorkspaceBootstrap(params: {
       .from(workspaceSettings)
       .where(eq(workspaceSettings.workspaceId, params.workspaceId))
       .limit(1),
+    db
+      .select({ overallScore: interviewSessions.overallScore })
+      .from(interviewSessions)
+      .where(eq(interviewSessions.workspaceId, params.workspaceId))
+      .orderBy(desc(interviewSessions.createdAt))
+      .limit(1),
   ]);
 
   const nextBestAction = await computeNextBestAction({
@@ -77,6 +84,10 @@ export async function getWorkspaceBootstrap(params: {
       readyDocuments: Number(statsRow?.ready ?? 0),
       pendingDocuments: Number(statsRow?.pending ?? 0),
       todaySpendUsd: Number(Number(spendRows[0]?.spend ?? 0).toFixed(4)),
+      lastMockScore:
+        lastMock[0]?.overallScore != null
+          ? Number(Number(lastMock[0].overallScore).toFixed(1))
+          : null,
     },
   };
 }

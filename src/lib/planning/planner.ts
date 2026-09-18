@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { generateSyllabus } from "./syllabus";
 import { daysUntil } from "@/lib/utils";
+import { cacheGet, cacheSet, nbaCacheKey } from "@/lib/cache/ai-cache";
 
 export async function createAdaptivePlan(params: {
   workspaceId: string;
@@ -161,10 +162,31 @@ export async function completeTask(params: {
   return task;
 }
 
+export type NextBestAction = {
+  title: string;
+  why: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  minutes: number;
+  href: string;
+  taskId?: string;
+};
+
 export async function computeNextBestAction(params: {
   workspaceId: string;
   userId: string;
-}) {
+}): Promise<NextBestAction> {
+  const cached = await cacheGet<NextBestAction>(nbaCacheKey(params.workspaceId));
+  if (cached?.title) return cached;
+
+  const action = await computeNextBestActionFresh(params);
+  await cacheSet(nbaCacheKey(params.workspaceId), action, 90);
+  return action;
+}
+
+async function computeNextBestActionFresh(params: {
+  workspaceId: string;
+  userId: string;
+}): Promise<NextBestAction> {
   const [pendingClaims, docStats, openMistakes, dueTasks] = await Promise.all([
     db
       .select({ id: claims.id })
@@ -222,7 +244,7 @@ export async function computeNextBestAction(params: {
       why: "Syllabus and quizzes need grounded source material.",
       priority: "HIGH" as const,
       minutes: 10,
-      href: "documents",
+      href: "memory?tab=documents",
     };
   }
 
@@ -232,7 +254,7 @@ export async function computeNextBestAction(params: {
       why: `${pendingDocs} document(s) are still being processed.`,
       priority: "MEDIUM" as const,
       minutes: 5,
-      href: "documents",
+      href: "memory?tab=documents",
     };
   }
 
@@ -242,7 +264,7 @@ export async function computeNextBestAction(params: {
       why: "Repeated errors should be fixed before new topics.",
       priority: "HIGH" as const,
       minutes: 20,
-      href: "mistakes",
+      href: "learn/mistakes",
     };
   }
 
@@ -253,7 +275,7 @@ export async function computeNextBestAction(params: {
       why: "Post-mock interview remediation is high leverage close to interview day.",
       priority: "HIGH" as const,
       minutes: interviewDrills[0].estimatedMinutes ?? 20,
-      href: "today",
+      href: "",
       taskId: interviewDrills[0].id,
     };
   }
@@ -275,7 +297,7 @@ export async function computeNextBestAction(params: {
       why: todays[0].description ?? "Scheduled for today in your adaptive plan.",
       priority: (todays[0].priority?.toUpperCase() as "HIGH" | "MEDIUM" | "LOW") || "HIGH",
       minutes: todays[0].estimatedMinutes ?? 25,
-      href: "today",
+      href: "",
       taskId: todays[0].id,
     };
   }
@@ -295,7 +317,7 @@ export async function computeNextBestAction(params: {
     why: "Next pending task from your preparation plan.",
     priority: "MEDIUM" as const,
     minutes: dueTasks[0]!.estimatedMinutes ?? 25,
-    href: "today",
+    href: "",
     taskId: dueTasks[0]!.id,
   };
 }
@@ -350,7 +372,7 @@ export async function applyPlanIntake(params: {
   } else {
     await db.insert(workspaceSettings).values({
       workspaceId: params.workspaceId,
-      maxDailyAiSpendUsd: 5,
+      maxDailyAiSpendUsd: 1.5,
       settings: nextSettings,
     });
   }

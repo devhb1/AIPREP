@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { claims, claimSources, sources, workspaces } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { approveClaim, rejectClaim } from "@/lib/memory/approval";
+import { invalidateNba } from "@/lib/cache/ai-cache";
 
 export async function GET(request: Request) {
   const user = await requireUser();
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
 
   if (action === "reject") {
     const claim = await rejectClaim({ claimId, workspaceId });
+    await invalidateNba(workspaceId);
     return NextResponse.json({ claim });
   }
 
@@ -97,6 +99,7 @@ export async function POST(request: Request) {
           ? "note"
           : "trusted",
   });
+  await invalidateNba(workspaceId);
 
   return NextResponse.json({ memory });
 }

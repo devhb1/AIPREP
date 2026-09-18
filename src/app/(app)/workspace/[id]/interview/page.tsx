@@ -312,15 +312,20 @@ export default function InterviewPage() {
           </button>
         </div>
         <p className="text-xs text-muted">
-          Continuous live Realtime is optional and expensive —{" "}
-          <button
-            type="button"
-            onClick={startLive}
-            className="font-semibold text-accent underline"
-          >
-            open live Realtime
-          </button>
-          .
+          Type answers if the mic is unreliable.
+          {process.env.NEXT_PUBLIC_ENABLE_REALTIME_VOICE === "true" ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={startLive}
+                className="font-semibold text-accent underline"
+              >
+                Open experimental Realtime
+              </button>
+              .
+            </>
+          ) : null}
         </p>
       </section>
 

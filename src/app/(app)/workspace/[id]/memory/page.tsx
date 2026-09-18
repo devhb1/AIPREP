@@ -177,8 +177,13 @@ export default function MemoryPage() {
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Memory</h2>
         <p className="mt-2 text-sm text-muted">
           Single ledger — research claims, trusted facts, notes, stories, PDFs.
-          Approve what mentors may use; drill deeper on weak topics.
         </p>
+        <Link
+          href={`/workspace/${workspaceId}/research`}
+          className="mt-2 inline-block text-sm font-semibold text-accent"
+        >
+          Run a research campaign →
+        </Link>
       </div>
 
       <InstallHomeScreenBanner />

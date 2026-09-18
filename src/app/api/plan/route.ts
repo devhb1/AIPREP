@@ -12,6 +12,7 @@ import {
 } from "@/lib/planning/planner";
 import { listSyllabus, generateSyllabus } from "@/lib/planning/syllabus";
 import { rateLimit } from "@/lib/rate-limit";
+import { invalidateNba } from "@/lib/cache/ai-cache";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       workspaceId: parsed.data.workspaceId,
       taskId: parsed.data.taskId,
     });
+    await invalidateNba(parsed.data.workspaceId);
     return NextResponse.json({ task });
   }
 
@@ -133,5 +135,6 @@ export async function POST(request: Request) {
     userId: user.id,
     days: parsed.data.days,
   });
+  await invalidateNba(parsed.data.workspaceId);
   return NextResponse.json(result);
 }

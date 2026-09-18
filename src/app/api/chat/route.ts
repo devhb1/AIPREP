@@ -107,49 +107,6 @@ export async function POST(request: Request) {
     content: message,
   });
 
-  const chunks = await retrieveRelevantChunks({
-    workspaceId,
-    query: message,
-    userId: user.id,
-    limit: 8,
-  });
-
-  const contextBlock =
-    chunks.length === 0
-      ? "No trusted memory or indexed document excerpts were retrieved. Say that evidence is missing and ask the user to upload PDFs and/or approve research claims."
-      : chunks
-          .map((c, i) => {
-            const label =
-              c.kind === "memory"
-                ? `Trusted memory`
-                : `${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}`;
-            return `[#${i + 1}] (${c.kind}) ${label}\n${c.content}`;
-          })
-          .join("\n\n");
-
-  const system = mentorSystem(workspace.name, {
-    preparationType: workspace.preparationType,
-    organization: workspace.organization,
-    role: workspace.role,
-  });
-
-  const userPrompt = `USER QUESTION:
-${message}
-
-SOURCE EXCERPTS:
-${contextBlock}`;
-
-  const citations = chunks.map((c, i) => ({
-    index: i + 1,
-    kind: c.kind,
-    documentId: c.documentId,
-    memoryId: c.memoryId ?? null,
-    title: c.title,
-    pageNumber: c.pageNumber,
-    excerpt: c.content.slice(0, 280),
-    distance: c.distance,
-  }));
-
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -160,6 +117,51 @@ ${contextBlock}`;
       };
 
       try {
+        send("started", { threadId: thread!.id });
+
+        const chunks = await retrieveRelevantChunks({
+          workspaceId,
+          query: message,
+          userId: user.id,
+          limit: 8,
+        });
+
+        const contextBlock =
+          chunks.length === 0
+            ? "No trusted memory or indexed document excerpts were retrieved. Say that evidence is missing and ask the user to upload PDFs and/or approve research claims."
+            : chunks
+                .map((c, i) => {
+                  const label =
+                    c.kind === "memory"
+                      ? `Trusted memory`
+                      : `${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}`;
+                  return `[#${i + 1}] (${c.kind}) ${label}\n${c.content}`;
+                })
+                .join("\n\n");
+
+        const system = mentorSystem(workspace.name, {
+          preparationType: workspace.preparationType,
+          organization: workspace.organization,
+          role: workspace.role,
+        });
+
+        const userPrompt = `USER QUESTION:
+${message}
+
+SOURCE EXCERPTS:
+${contextBlock}`;
+
+        const citations = chunks.map((c, i) => ({
+          index: i + 1,
+          kind: c.kind,
+          documentId: c.documentId,
+          memoryId: c.memoryId ?? null,
+          title: c.title,
+          pageNumber: c.pageNumber,
+          excerpt: c.content.slice(0, 280),
+          distance: c.distance,
+        }));
+
         send("meta", { threadId: thread!.id, citations });
         let full = "";
         await streamChatCompletion({

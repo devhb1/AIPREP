@@ -36,8 +36,8 @@ export default function SettingsPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [dailyCap, setDailyCap] = useState("5");
-  const [voiceCap, setVoiceCap] = useState("1");
+  const [dailyCap, setDailyCap] = useState("1.5");
+  const [voiceCap, setVoiceCap] = useState("0.5");
   const [researchCap, setResearchCap] = useState("20");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +53,12 @@ export default function SettingsPage() {
     const notif = await notifRes.json();
     setUsage(main.usage ?? null);
     setSettings(main.settings ?? null);
-    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 5));
+    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 1.5));
     setVoiceCap(
       String(
         main.usage?.maxDailyVoiceSpendUsd ??
           main.settings?.settings?.maxDailyVoiceSpendUsd ??
-          3,
+          0.5,
       ),
     );
     setResearchCap(String(main.settings?.maxResearchQueries ?? 20));
@@ -157,7 +157,7 @@ export default function SettingsPage() {
           ["Today voice $", usage ? (usage.todayVoiceSpendUsd ?? 0).toFixed(4) : "—"],
           ["Week $", usage ? usage.weekSpendUsd.toFixed(4) : "—"],
           ["AI cap $", usage ? String(usage.maxDailyAiSpendUsd) : "—"],
-          ["Voice cap $", usage ? String(usage.maxDailyVoiceSpendUsd ?? 3) : "—"],
+          ["Voice cap $", usage ? String(usage.maxDailyVoiceSpendUsd ?? 0.5) : "—"],
           ["Today calls", usage ? String(usage.todayCalls) : "—"],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-line bg-panel p-4">

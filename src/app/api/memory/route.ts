@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/session";
 import { approveClaim, rejectClaim } from "@/lib/memory/approval";
+import { invalidateNba } from "@/lib/cache/ai-cache";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -304,6 +305,7 @@ export async function POST(request: Request) {
         claimId: parsed.data.claimId,
         workspaceId,
       });
+      await invalidateNba(workspaceId);
       return NextResponse.json({ claim });
     }
     const memory = await approveClaim({
@@ -312,6 +314,7 @@ export async function POST(request: Request) {
       workspaceId,
       mode: "trusted",
     });
+    await invalidateNba(workspaceId);
     return NextResponse.json({ memory });
   }
 
