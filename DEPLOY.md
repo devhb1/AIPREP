@@ -46,7 +46,7 @@ CRON_SECRET
 JOB_WORKER_SECRET
 ```
 
-Primary region is `bom1` (Mumbai) via `vercel.json`. Cron hits `/api/jobs/worker` every 2 minutes to drain durable jobs if `after()` drops work on cold deploys (Pro cron frequency; Hobby may limit schedule).
+Primary region is `bom1` (Mumbai) via `vercel.json`. Cron hits `/api/jobs/worker` daily at 03:00 UTC on Hobby (upgrade to Pro for frequent drains). You can also hit the worker manually with `CRON_SECRET`.
 
 5. Deploy.
 
