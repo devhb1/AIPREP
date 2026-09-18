@@ -24,7 +24,7 @@ export function PdfPickButton({ file, onFile, disabled }: Props) {
         className={`relative flex min-h-28 flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-4 py-5 text-center transition ${
           dragging
             ? "border-accent bg-accent-soft"
-            : "border-line bg-white hover:border-accent/50 hover:bg-accent-soft/40"
+            : "border-line bg-panel hover:border-accent/50 hover:bg-accent-soft/40"
         } ${disabled ? "opacity-60" : ""}`}
         onDragEnter={(e) => {
           e.preventDefault();

@@ -290,14 +290,14 @@ export default function MemoryPage() {
 
       {quickResult ? (
           <div className="mt-4 space-y-3">
-            <div className="rounded-xl bg-white p-3 text-sm text-ink">
+            <div className="rounded-xl bg-panel p-3 text-sm text-ink">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
                 Answer{quickResult.cached ? " · cached" : ""}
               </p>
               <p className="whitespace-pre-wrap">{quickResult.synthesizedAnswer}</p>
             </div>
             {quickResult.claims.map((claim) => (
-              <article key={claim.id} className="rounded-xl border border-line bg-white p-3">
+              <article key={claim.id} className="rounded-xl border border-line bg-panel p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
                   Candidate fact{claim.topic ? ` · ${claim.topic}` : ""}
                 </p>
@@ -467,7 +467,7 @@ export default function MemoryPage() {
                   : tab === "stories"
                     ? " — add interview stories from the Interview hub."
                     : tab === "scraped"
-                      ? " — run Research with KVS defaults or your own prompt."
+                      ? " — run Research with the default pack or your own prompt."
                       : "."}
             </p>
             {tab === "scraped" || tab === "all" ? (
@@ -659,7 +659,7 @@ export default function MemoryPage() {
                     className={`rounded-xl border px-3 py-2 text-sm ${
                       topicFilter === t.topic
                         ? "border-accent bg-accent-soft"
-                        : "border-line bg-white"
+                        : "border-line bg-panel"
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -777,7 +777,7 @@ export default function MemoryPage() {
           <input
             value={quickQuery}
             onChange={(e) => setQuickQuery(e.target.value)}
-            placeholder="What’s the KVS PRT age relaxation for OBC candidates?"
+            placeholder="What’s a common interview question on child development?"
             className="min-h-11 rounded-[var(--radius-btn)] border border-line px-3 py-2 text-sm"
             disabled={quickBusy}
           />

@@ -2,11 +2,17 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/brand-mark";
+import { ThemeToggle } from "@/components/theme-provider";
+
+function safeNextPath(raw: string | null) {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  if (raw.startsWith("/login") || raw.startsWith("/signup")) return "/dashboard";
+  return raw;
+}
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,37 +22,58 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setLoading(false);
-    if (signInError) {
-      setError(signInError.message);
-      return;
+    try {
+      const supabase = createClient();
+      const signIn = supabase.auth.signInWithPassword({ email, password });
+      const timed = await Promise.race([
+        signIn,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Sign-in timed out. Check your connection and try again.",
+                ),
+              ),
+            20000,
+          ),
+        ),
+      ]);
+      if (timed.error) {
+        setError(timed.error.message);
+        setLoading(false);
+        return;
+      }
+      const next = safeNextPath(
+        new URLSearchParams(window.location.search).get("next"),
+      );
+      // Full navigation so session cookies apply; soft push+refresh often hangs.
+      window.location.assign(next);
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Sign-in failed");
     }
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <div className="rounded-2xl border border-line bg-panel p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-          AIPREP
-        </p>
-        <h1 className="mt-3 text-3xl text-ink">Sign in</h1>
+    <main className="landing-shell relative flex min-h-[100dvh] w-full items-center justify-center px-5 py-12">
+      <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] sm:right-6">
+        <ThemeToggle />
+      </div>
+      <div className="relative z-10 w-full max-w-md rounded-[var(--radius-card)] border border-line bg-panel p-8 shadow-[var(--shadow-soft)]">
+        <BrandMark href="/" size="md" />
+        <h1 className="mt-6 text-3xl text-ink">Sign in</h1>
         <p className="mt-2 text-sm text-muted">
-          Personal mentor for KVS PRT Interview 2026 preparation.
+          Continue preparing with your AI interview mentor.
         </p>
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Email</span>
             <input
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -54,10 +81,11 @@ export default function LoginPage() {
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Password</span>
             <input
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
               type="password"
               required
               minLength={6}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -66,7 +94,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="btn-primary w-full disabled:opacity-60"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>

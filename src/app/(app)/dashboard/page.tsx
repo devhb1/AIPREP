@@ -13,14 +13,23 @@ import { daysUntil, formatDate } from "@/lib/utils";
 export default async function DashboardPage() {
   const user = await requireUser();
   if (!user) redirect("/login");
-  await ensureProfile(user);
-  await ensureKvsSeedWorkspace(user.id);
+  try {
+    await ensureProfile(user);
+    await ensureKvsSeedWorkspace(user.id);
+  } catch (error) {
+    console.error("dashboard.bootstrap", error);
+  }
 
-  const rows = await db
-    .select()
-    .from(workspaces)
-    .where(eq(workspaces.userId, user.id))
-    .orderBy(desc(workspaces.createdAt));
+  let rows: (typeof workspaces.$inferSelect)[] = [];
+  try {
+    rows = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.userId, user.id))
+      .orderBy(desc(workspaces.createdAt));
+  } catch (error) {
+    console.error("dashboard.workspaces", error);
+  }
 
   return (
     <main className="mx-auto max-w-5xl space-y-8">
@@ -30,10 +39,17 @@ export default async function DashboardPage() {
         </p>
         <h2 className="mt-2 text-4xl text-ink">Preparation workspaces</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Research → approve in Memory → personal Plan → live voice mock. Built for
-          KVS PRT Interview 2026 beta.
+          Mock panels first, then mentor chat, memory, and a plan that adapts to
+          your answers.
         </p>
       </header>
+
+      {rows.length === 0 ? (
+        <p className="rounded-[var(--radius-card)] border border-line bg-panel p-5 text-sm text-muted">
+          No workspaces yet — refresh in a moment, or sign out and back in if this
+          persists.
+        </p>
+      ) : null}
 
       <section className="grid gap-4">
         {rows.map((workspace) => {

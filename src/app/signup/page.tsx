@@ -2,11 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/brand-mark";
+import { ThemeToggle } from "@/components/theme-provider";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,53 +19,61 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     setMessage(null);
-    const supabase = createClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    setLoading(false);
-    if (signUpError) {
-      setError(signUpError.message);
-      return;
+    try {
+      const supabase = createClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (signUpError) {
+        setError(signUpError.message);
+        setLoading(false);
+        return;
+      }
+      if (data.session) {
+        window.location.assign("/dashboard");
+        return;
+      }
+      setLoading(false);
+      setMessage("Check your email to confirm your account, then sign in.");
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Sign-up failed");
     }
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
-      return;
-    }
-    setMessage("Check your email to confirm your account, then sign in.");
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <div className="rounded-2xl border border-line bg-panel p-8 shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-          AIPREP
-        </p>
-        <h1 className="mt-3 text-3xl text-ink">Create account</h1>
+    <main className="landing-shell relative flex min-h-[100dvh] w-full items-center justify-center px-5 py-12">
+      <div className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] sm:right-6">
+        <ThemeToggle />
+      </div>
+      <div className="relative z-10 w-full max-w-md rounded-[var(--radius-card)] border border-line bg-panel p-8 shadow-[var(--shadow-soft)]">
+        <BrandMark href="/" size="md" />
+        <h1 className="mt-6 text-3xl text-ink">Create account</h1>
         <p className="mt-2 text-sm text-muted">
-          We will seed a KVS PRT Interview 2026 workspace on first login.
+          Get a ready-to-use interview prep workspace on first login.
         </p>
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Full name</span>
             <input
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              autoComplete="name"
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Email</span>
             <input
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -73,10 +81,11 @@ export default function SignupPage() {
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Password</span>
             <input
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 outline-none ring-accent focus:ring-2"
+              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
               type="password"
               required
               minLength={6}
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -86,7 +95,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="btn-primary w-full disabled:opacity-60"
           >
             {loading ? "Creating…" : "Create account"}
           </button>

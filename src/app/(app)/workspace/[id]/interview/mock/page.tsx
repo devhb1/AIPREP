@@ -139,10 +139,13 @@ export default function MockPanelPage() {
       return;
     }
     setStatus("starting");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45000);
     try {
       const res = await fetch("/api/interview/voice-turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           workspaceId,
           action: "start",
@@ -179,7 +182,13 @@ export default function MockPanelPage() {
       setStatus("ready");
     } catch (err) {
       setStatus("idle");
-      setError(err instanceof Error ? err.message : "Start failed");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Start timed out — check connection and try again.");
+      } else {
+        setError(err instanceof Error ? err.message : "Start failed");
+      }
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
@@ -417,7 +426,7 @@ export default function MockPanelPage() {
               onChange={(e) => setTyped(e.target.value)}
               disabled={status !== "ready"}
               placeholder="Type your answer…"
-              className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-white px-3 text-sm"
+              className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-background px-3 text-sm text-ink"
             />
             <Button type="submit" disabled={status !== "ready" || !typed.trim()}>
               Send
@@ -437,7 +446,7 @@ export default function MockPanelPage() {
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Mock panel</h2>
         <p className="mt-2 text-sm text-muted">
           HR opens, pedagogy probes, general awareness, then HR closes — like a
-          real KVS PRT panel.
+          real teaching interview panel.
         </p>
       </div>
 

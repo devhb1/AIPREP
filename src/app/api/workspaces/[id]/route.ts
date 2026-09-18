@@ -44,7 +44,7 @@ export async function GET(_request: Request, { params }: Params) {
   const nextBestAction =
     readyDocs === 0
       ? {
-          title: "Upload your official KVS notification / syllabus PDF",
+          title: "Upload your official notification / syllabus PDF",
           why: "The mentor can only ground answers in documents you provide in Phase 1.",
           priority: "HIGH",
           estimatedMinutes: 10,
@@ -57,7 +57,7 @@ export async function GET(_request: Request, { params }: Params) {
             estimatedMinutes: 5,
           }
         : {
-            title: "Ask the mentor what to prepare first for KVS PRT",
+            title: "Ask the mentor what to prepare first for your interview",
             why: "Your documents are indexed. Start with a grounded briefing on priorities.",
             priority: "HIGH",
             estimatedMinutes: 15,

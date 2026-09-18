@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Libre_Franklin, Source_Sans_3 } from "next/font/google";
+import {
+  ThemeProvider,
+  THEME_BOOT_SCRIPT,
+} from "@/components/theme-provider";
 import "./globals.css";
 
 const display = Libre_Franklin({
@@ -14,20 +18,21 @@ const sans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "AIPREP — KVS PRT Interview Mentor",
+  title: "AI Prep — Your AI Interview Mentor",
   description:
-    "Personal AI exam and interview preparation OS for KVS PRT Interview 2026.",
-  applicationName: "AIPREP",
-    appleWebApp: {
+    "Practice mock interviews, get grounded coaching, and walk into your panel ready.",
+  applicationName: "AI Prep",
+  appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "AIPREP",
+    title: "AI Prep",
   },
   formatDetection: {
     telephone: false,
   },
   icons: {
-    apple: [{ url: "/apple-touch-icon.png", sizes: "192x192" }],
+    icon: [{ url: "/aiprep-logo.jpg", type: "image/jpeg" }],
+    apple: [{ url: "/aiprep-logo.jpg", sizes: "180x180", type: "image/jpeg" }],
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -39,7 +44,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0f766e",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0d9488" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1220" },
+  ],
 };
 
 export default function RootLayout({
@@ -48,8 +56,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+    <html
+      lang="en"
+      className={`${display.variable} ${sans.variable} h-full`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className="min-h-full antialiased">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

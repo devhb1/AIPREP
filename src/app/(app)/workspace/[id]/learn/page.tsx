@@ -23,8 +23,8 @@ type ChatItem = {
 };
 
 const CHIPS = [
-  ["Test me", "Quiz me with 3 short KVS PRT interview questions and wait for my answers."],
-  ["Explain a topic", "Explain child-centered pedagogy for a PRT classroom in simple language, with one example."],
+  ["Test me", "Quiz me with 3 short teaching interview questions and wait for my answers."],
+  ["Explain a topic", "Explain child-centered pedagogy for a primary classroom in simple language, with one example."],
   ["What's due", "What should I study today given my plan and weak areas?"],
   ["Review mistakes", "Help me review recent practice mistakes and how to answer better next time."],
 ] as const;
@@ -40,7 +40,7 @@ export default function LearnMentorPage() {
     {
       role: "assistant",
       content:
-        "I am your mentor. Ask grounded questions about KVS PRT prep. If evidence is missing, I will say so.",
+        "I am your interview mentor. Ask grounded prep questions. If evidence is missing, I will say so.",
     },
   ]);
 
@@ -181,7 +181,7 @@ export default function LearnMentorPage() {
             className={
               item.role === "user"
                 ? "ml-4 rounded-2xl bg-accent-soft px-4 py-3 text-sm sm:ml-8"
-                : "mr-4 rounded-2xl border border-line bg-white px-4 py-3 text-sm sm:mr-8"
+                : "mr-4 rounded-2xl border border-line bg-panel px-4 py-3 text-sm sm:mr-8"
             }
           >
             <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -235,7 +235,7 @@ export default function LearnMentorPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about documents, syllabus, interview prep…"
-          className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-white px-4 py-2 text-sm"
+          className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-panel px-4 py-2 text-sm"
           disabled={loading}
         />
         <Button type="submit" disabled={loading || !input.trim()}>

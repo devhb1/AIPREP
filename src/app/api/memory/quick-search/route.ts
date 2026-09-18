@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     await assertWithinDailyBudget({
       workspaceId: parsed.data.workspaceId,
       userId: user.id,
+      email: user.email,
     });
     const result = await runQuickSearch({
       workspaceId: parsed.data.workspaceId,

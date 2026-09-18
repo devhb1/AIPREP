@@ -485,7 +485,7 @@ export default function LiveVoiceInterviewPage() {
               value={language}
               disabled={status === "connecting"}
               onChange={(e) => setLanguage(e.target.value as InterviewLanguage)}
-              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+              className="min-h-11 w-full rounded-xl border border-line bg-panel px-3 py-2"
             >
               <option value="en">English</option>
               <option value="hi">Hindi</option>
@@ -498,7 +498,7 @@ export default function LiveVoiceInterviewPage() {
               value={judgeMode}
               disabled={status === "connecting"}
               onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+              className="min-h-11 w-full rounded-xl border border-line bg-panel px-3 py-2"
             >
               <option value="easy">Easy</option>
               <option value="normal">Normal</option>
@@ -511,7 +511,7 @@ export default function LiveVoiceInterviewPage() {
               value={targetMinutes}
               disabled={status === "connecting"}
               onChange={(e) => setTargetMinutes(Number(e.target.value))}
-              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+              className="min-h-11 w-full rounded-xl border border-line bg-panel px-3 py-2"
             >
               <option value={3}>3 min — cheapest drill</option>
               <option value={5}>5 min — default</option>

@@ -159,7 +159,7 @@ export default function ResearchPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Research</h2>
         <p className="mt-2 text-sm text-muted">
-          Use the KVS default pack or a custom prompt. Optionally ground claims in
+          Use the default research pack or a custom prompt. Optionally ground claims in
           your PDFs. Findings stay candidates until you approve them in Memory.
         </p>
       </div>
@@ -174,19 +174,19 @@ export default function ResearchPage() {
             onClick={() => setMode("defaults")}
             className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
               mode === "defaults"
-                ? "bg-accent text-white"
-                : "border border-line bg-white"
+                ? "bg-accent text-white dark:text-[#042f2e]"
+                : "border border-line bg-panel text-ink"
             }`}
           >
-            KVS default pack
+            Default pack
           </button>
           <button
             type="button"
             onClick={() => setMode("custom")}
             className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold ${
               mode === "custom"
-                ? "bg-accent text-white"
-                : "border border-line bg-white"
+                ? "bg-accent text-white dark:text-[#042f2e]"
+                : "border border-line bg-panel text-ink"
             }`}
           >
             Custom prompt
@@ -200,14 +200,14 @@ export default function ResearchPage() {
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
               rows={3}
-              placeholder="e.g. Latest KVS PRT document checklist and demo lesson expectations"
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm"
+              placeholder="e.g. Latest document checklist and demo lesson expectations"
+              className="w-full rounded-xl border border-line bg-background px-3 py-2 text-sm text-ink"
               disabled={starting || Boolean(live)}
             />
           </label>
         ) : (
           <p className="text-sm text-muted">
-            Runs the curated official / PYQ / panel query pack for KVS PRT prep.
+            Runs the curated official / PYQ / panel query pack for teaching interviews.
           </p>
         )}
 
@@ -216,7 +216,7 @@ export default function ResearchPage() {
           <select
             value={depth}
             onChange={(e) => setDepth(e.target.value as typeof depth)}
-            className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
+            className="min-h-11 w-full rounded-xl border border-line bg-background px-3 py-2 text-ink"
             disabled={starting || Boolean(live)}
           >
             <option value="quick">Quick (2 queries)</option>
@@ -230,7 +230,7 @@ export default function ResearchPage() {
             <p className="mb-2 text-sm text-muted">
               Ground in PDFs (optional) — only ready files can be selected
             </p>
-            <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-line bg-white p-3">
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-line bg-background p-3">
               {docs.map((d) => {
                 const ready = d.status === "ready";
                 return (
@@ -257,7 +257,7 @@ export default function ResearchPage() {
             </div>
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-line bg-white p-3 text-sm text-muted">
+          <p className="rounded-xl border border-dashed border-line bg-background p-3 text-sm text-muted">
             No PDFs yet.{" "}
             <Link
               href={`/workspace/${workspaceId}/documents`}

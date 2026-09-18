@@ -17,7 +17,7 @@ const HOUR_CHIPS = [0.5, 1, 1.5, 2, 3, 4];
 const DAY_CHIPS = [3, 4, 5, 6, 7];
 
 const PROMPTS = [
-  "What's your name, and where are you in the KVS PRT process right now?",
+  "What's your name, and where are you in your interview prep right now?",
   "When's your interview, if you know the date? If not, roughly when do you expect it?",
   "How many days a week can you realistically study, and how many hours on a typical day?",
   "Which subjects or areas feel strong for you already?",
@@ -170,7 +170,7 @@ export function OnboardingChat({
         daysUntilInterview:
           extracted.extracted?.daysUntilInterview ??
           (daysMatch ? Number(daysMatch[1]) : undefined),
-        goals: "Clear KVS PRT interview with calm, example-rich answers",
+        goals: "Clear the teaching interview with calm, example-rich answers",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read that");
@@ -312,7 +312,7 @@ export function OnboardingChat({
                 type="button"
                 onClick={() => setDaysPerWeek(n)}
                 className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
-                  daysPerWeek === n ? "bg-accent text-white" : "border border-line bg-white"
+                  daysPerWeek === n ? "bg-accent text-white" : "border border-line bg-panel"
                 }`}
               >
                 {n} days
@@ -326,7 +326,7 @@ export function OnboardingChat({
                 type="button"
                 onClick={() => setHoursPerDay(n)}
                 className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
-                  hoursPerDay === n ? "bg-accent text-white" : "border border-line bg-white"
+                  hoursPerDay === n ? "bg-accent text-white" : "border border-line bg-panel"
                 }`}
               >
                 {n}h
@@ -364,7 +364,7 @@ export function OnboardingChat({
                 className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
                   selected.includes(area)
                     ? "bg-accent text-white"
-                    : "border border-line bg-white"
+                    : "border border-line bg-panel"
                 }`}
               >
                 {area}
@@ -449,7 +449,7 @@ export function OnboardingChat({
             className={
               bubble.role === "you"
                 ? "ml-6 rounded-2xl bg-accent-soft px-4 py-3 text-sm"
-                : "mr-6 rounded-2xl border border-line bg-white px-4 py-3 text-sm"
+                : "mr-6 rounded-2xl border border-line bg-panel px-4 py-3 text-sm"
             }
           >
             <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted">

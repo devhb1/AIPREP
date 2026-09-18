@@ -96,7 +96,7 @@ export async function createAdaptivePlan(params: {
         topicId: topic?.id ?? null,
         title: topic
           ? `Study: ${topic.name}`
-          : "Review KVS PRT interview fundamentals",
+          : "Review interview fundamentals",
         description: topic?.description ?? "Focused preparation block",
         taskType: day % 3 === 2 ? "practice" : "study",
         status: "pending",
@@ -364,7 +364,7 @@ async function computeNextBestActionFresh(params: {
   // 7. Docs soft secondary — only after at least one mock.
   if (readyDocs === 0) {
     return {
-      title: "Upload official KVS PDFs",
+      title: "Upload official syllabus / notification PDFs",
       why: "Ground the next mock and mentor answers in your documents.",
       priority: "MEDIUM" as const,
       minutes: 10,

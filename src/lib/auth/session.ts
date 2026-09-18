@@ -50,7 +50,7 @@ export async function ensureKvsSeedWorkspace(userId: string) {
     .from(workspaces)
     .where(eq(workspaces.userId, userId));
 
-  const seed = existing.find((w) => w.isSeed || w.name.includes("KVS PRT"));
+  const seed = existing.find((w) => w.isSeed || w.name.includes("KVS PRT") || w.name === "Interview Prep");
   if (seed) return seed;
 
   const interviewDate = new Date("2026-06-15T09:00:00+05:30");
@@ -59,10 +59,10 @@ export async function ensureKvsSeedWorkspace(userId: string) {
     .insert(workspaces)
     .values({
       userId,
-      name: "KVS PRT Interview 2026",
+      name: "Interview Prep",
       preparationType: "Teaching Interview",
-      organization: "Kendriya Vidyalaya Sangathan",
-      role: "PRT",
+      organization: null,
+      role: "Primary Teacher",
       interviewDate,
       currentStage: "Interview preparation",
       location: "India",
@@ -79,7 +79,7 @@ export async function ensureKvsSeedWorkspace(userId: string) {
     maxDailyAiSpendUsd: DEFAULT_DAILY_AI_USD,
     maxResearchQueries: 20,
     settings: {
-      seedLabel: "KVS PRT Interview 2026",
+      seedLabel: "Interview Prep",
       focus: ["pedagogy", "child development", "subject knowledge", "interview documents"],
       maxDailyVoiceSpendUsd: DEFAULT_DAILY_VOICE_USD,
     },

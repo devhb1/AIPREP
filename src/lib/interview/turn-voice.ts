@@ -47,18 +47,12 @@ export async function startTurnVoiceInterview(params: {
       .where(eq(interviewSessions.id, started.session.id));
   }
 
-  const speech = await synthesizeSpeech({
-    text: started.openingQuestion,
-    voice: ttsVoiceForPersona("hr"),
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-  });
-
+  // Skip TTS on start — text-first avoids Vercel timeouts. Client can speak later.
   return {
     session: { ...started.session, mode: "voice" as const },
     openingQuestion: started.openingQuestion,
-    audioBase64: speech.audioBase64,
-    audioMimeType: speech.mimeType,
+    audioBase64: "",
+    audioMimeType: "audio/mpeg",
     language,
     engine: "turn_based" as const,
     persona: started.persona,
@@ -109,12 +103,26 @@ export async function answerTurnVoiceInterview(params: {
     answer: stt.text,
   });
 
-  const speech = await synthesizeSpeech({
-    text: turn.interviewerTurn.content,
-    voice: ttsVoiceForPersona(turn.persona),
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-  });
+  // Best-effort TTS — never block the turn on speech synthesis.
+  let audioBase64 = "";
+  let audioMimeType = "audio/mpeg";
+  try {
+    const speech = await Promise.race([
+      synthesizeSpeech({
+        text: turn.interviewerTurn.content,
+        voice: ttsVoiceForPersona(turn.persona),
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000)),
+    ]);
+    if (speech) {
+      audioBase64 = speech.audioBase64;
+      audioMimeType = speech.mimeType;
+    }
+  } catch {
+    // text-only turn is valid
+  }
 
   return {
     transcript: stt.text,
@@ -125,8 +133,8 @@ export async function answerTurnVoiceInterview(params: {
     shouldEnd: turn.shouldEnd,
     persona: turn.persona,
     personaLabel: turn.personaLabel,
-    audioBase64: speech.audioBase64,
-    audioMimeType: speech.mimeType,
+    audioBase64,
+    audioMimeType,
   };
 }
 
@@ -143,12 +151,26 @@ export async function answerTurnTextInterview(params: {
     answer: params.answer,
   });
 
-  const speech = await synthesizeSpeech({
-    text: turn.interviewerTurn.content,
-    voice: ttsVoiceForPersona(turn.persona),
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-  });
+  // Best-effort TTS — never block the turn on speech synthesis.
+  let audioBase64 = "";
+  let audioMimeType = "audio/mpeg";
+  try {
+    const speech = await Promise.race([
+      synthesizeSpeech({
+        text: turn.interviewerTurn.content,
+        voice: ttsVoiceForPersona(turn.persona),
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000)),
+    ]);
+    if (speech) {
+      audioBase64 = speech.audioBase64;
+      audioMimeType = speech.mimeType;
+    }
+  } catch {
+    // text-only turn is valid
+  }
 
   return {
     transcript: params.answer,
@@ -159,8 +181,8 @@ export async function answerTurnTextInterview(params: {
     shouldEnd: turn.shouldEnd,
     persona: turn.persona,
     personaLabel: turn.personaLabel,
-    audioBase64: speech.audioBase64,
-    audioMimeType: speech.mimeType,
+    audioBase64,
+    audioMimeType,
   };
 }
 

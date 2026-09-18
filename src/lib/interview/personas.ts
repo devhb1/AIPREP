@@ -9,24 +9,24 @@ export const PERSONAS: Record<
   hr: {
     label: "Presiding / HR",
     ttsVoice: "alloy",
-    fragment: `You are the presiding/HR panel member. Ask about background, motivation for teaching, and why KVS. One or two spoken sentences. Never monologue.`,
+    fragment: `You are the presiding/HR panel member. Ask about background, motivation for teaching, and why this school/role. One or two spoken sentences. Never monologue.`,
   },
   pedagogy: {
     label: "Subject & Pedagogy",
     ttsVoice: "nova",
-    fragment: `You probe PRT subject knowledge and teaching methodology. If the answer is vague, ask for one concrete classroom example. One or two spoken sentences.`,
+    fragment: `You probe primary teaching subject knowledge and methodology. If the answer is vague, ask for one concrete classroom example. One or two spoken sentences.`,
   },
   ga: {
     label: "General Awareness",
     ttsVoice: "onyx",
-    fragment: `You ask brief general-awareness / current-affairs questions suitable for a government school PRT. Short and factual. Do not lecture.`,
+    fragment: `You ask brief general-awareness / current-affairs questions suitable for a primary teaching interview. Short and factual. Do not lecture.`,
   },
 };
 
 const OPENERS: Record<InterviewLanguage, string> = {
-  en: "Please introduce yourself. Why do you want to join KVS as a PRT?",
-  hi: "कृपया अपना परिचय दीजिए। आप केवीएस में पीआरटी क्यों बनना चाहते हैं?",
-  mix: "Please introduce yourself — KVS PRT kyun join karna chahte ho?",
+  en: "Please introduce yourself. Why do you want to become a primary teacher?",
+  hi: "कृपया अपना परिचय दीजिए। आप प्राथमिक शिक्षक क्यों बनना चाहते हैं?",
+  mix: "Please introduce yourself — primary teacher kyun banna chahte ho?",
 };
 
 const CLOSERS: Record<InterviewLanguage, string> = {

@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       await assertWithinDailyBudget({
         workspaceId: parsed.data.workspaceId,
         userId: user.id,
+        email: user.email,
       });
     } catch (error) {
       return NextResponse.json(

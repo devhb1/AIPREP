@@ -171,7 +171,11 @@ export async function POST(request: Request) {
 
   if (action === "start") {
     try {
-      await assertWithinDailyBudget({ workspaceId, userId: user.id });
+      await assertWithinDailyBudget({
+        workspaceId,
+        userId: user.id,
+        email: user.email,
+      });
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "Budget exceeded" },
@@ -207,7 +211,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "answer required" }, { status: 400 });
     }
     try {
-      await assertWithinDailyBudget({ workspaceId, userId: user.id });
+      await assertWithinDailyBudget({
+        workspaceId,
+        userId: user.id,
+        email: user.email,
+      });
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "Budget exceeded" },

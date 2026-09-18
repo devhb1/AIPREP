@@ -152,8 +152,8 @@ export function draftToPlanIntake(draft: IntakeDraft): PlanIntake {
   const goals =
     draft.goals?.trim() ||
     (draft.constraintsNote
-      ? `Clear KVS PRT interview. Constraint: ${draft.constraintsNote}`
-      : "Clear KVS PRT interview with calm, example-rich answers");
+      ? `Clear the teaching interview. Constraint: ${draft.constraintsNote}`
+      : "Clear the teaching interview with calm, example-rich answers");
 
   return {
     daysUntilInterview,

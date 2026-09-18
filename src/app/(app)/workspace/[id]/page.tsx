@@ -36,39 +36,41 @@ export default async function WorkspacePage({ params }: Props) {
     nextBestAction.title.toLowerCase().includes("mock");
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 pb-24">
+    <main className="mx-auto max-w-3xl space-y-5 pb-24 sm:space-y-6">
       <InstallHomeScreenBanner />
       {needsOnboarding ? <OnboardingChat workspaceId={id} /> : null}
-      <div>
+      <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
           Your interview mission
         </p>
-        <p className="mt-1 text-sm text-muted">
+        <h2 className="text-3xl leading-tight text-ink sm:text-4xl">{workspace.name}</h2>
+        <p className="text-sm text-muted">
           {formatDaysRemaining(stats.daysRemaining)} until interview
           {workspace.interviewDate ? ` · ${formatDate(workspace.interviewDate)}` : ""}
         </p>
-        <h2 className="mt-1 text-3xl text-ink sm:text-4xl">{workspace.name}</h2>
       </div>
 
       <Card className="border-accent/30 sm:p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-          Your next best action
+          Next best action
         </p>
-        <h3 className="mt-3 text-2xl text-ink sm:text-3xl">{nextBestAction.title}</h3>
-        <p className="mt-2 text-sm text-muted">{nextBestAction.why}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-muted">~{nextBestAction.minutes} min</span>
+        <h3 className="mt-2 text-xl leading-snug text-ink sm:mt-3 sm:text-2xl">
+          {nextBestAction.title}
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted">{nextBestAction.why}</p>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Link
             href={actionHref(id, nextBestAction.href)}
-            className="btn-primary inline-flex items-center"
+            className="btn-primary inline-flex w-full items-center justify-center sm:w-auto"
           >
-            {nextBestAction.title.length > 42
-              ? "Open →"
-              : nextBestAction.title}
+            {mockFocused ? "Start mock →" : "Open →"}
           </Link>
+          <span className="text-center text-sm text-muted sm:text-left">
+            ~{nextBestAction.minutes} min
+          </span>
         </div>
         {mockFocused ? (
-          <p className="mt-3 text-xs text-muted">
+          <p className="mt-3 text-xs leading-relaxed text-muted">
             Also:{" "}
             <Link
               href={`/workspace/${id}/memory`}
@@ -81,7 +83,7 @@ export default async function WorkspacePage({ params }: Props) {
         ) : null}
       </Card>
 
-      <section className="grid grid-cols-3 gap-3">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           ["Days left", formatDaysRemaining(stats.daysRemaining)],
           [
@@ -90,9 +92,13 @@ export default async function WorkspacePage({ params }: Props) {
           ],
           ["Docs ready", String(stats.readyDocuments)],
         ].map(([label, value]) => (
-          <div key={label} className="surface-card p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
-            <p className="mt-2 text-xl text-ink">{value}</p>
+          <div key={label} className="surface-card p-3 sm:p-4">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-muted sm:text-xs">
+              {label}
+            </p>
+            <p className="mt-1.5 text-lg font-semibold text-ink sm:mt-2 sm:text-xl">
+              {value}
+            </p>
           </div>
         ))}
       </section>

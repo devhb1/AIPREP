@@ -39,9 +39,9 @@ function judgeInstructions(mode: JudgeMode) {
     return "Be encouraging. Ask clear questions. Give supportive follow-ups. Score generously but honestly.";
   }
   if (mode === "strict") {
-    return "Be a demanding KVS panelist. Probe depth, examples, and pedagogy precision. Interrupt vague answers with sharp follow-ups. Score strictly.";
+    return "Be a demanding teaching-panel interviewer. Probe depth, examples, and pedagogy precision. Interrupt vague answers with sharp follow-ups. Score strictly.";
   }
-  return "Be a realistic KVS PRT interview panel. Ask one question at a time, then a relevant follow-up. Score fairly.";
+  return "Be a realistic primary teaching interview panel. Ask one question at a time, then a relevant follow-up. Score fairly.";
 }
 
 const turnSchema = z.object({

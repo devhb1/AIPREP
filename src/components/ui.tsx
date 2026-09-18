@@ -35,7 +35,9 @@ export function Chip({
       disabled={disabled}
       onClick={onClick}
       className={`min-h-11 shrink-0 rounded-[var(--radius-btn)] px-4 text-sm font-semibold disabled:opacity-50 ${
-        active ? "bg-accent text-white" : "border border-line bg-white text-ink"
+        active
+          ? "bg-accent text-white dark:text-[#042f2e]"
+          : "border border-line bg-panel text-ink"
       }`}
     >
       {children}
@@ -63,7 +65,7 @@ export function Button({
       ? "bg-accent text-white"
       : variant === "danger"
         ? "text-[var(--danger)] border border-line"
-        : "border border-line bg-white text-ink";
+        : "border border-line bg-panel text-ink";
   return (
     <button
       type={type}
@@ -140,7 +142,7 @@ export function Timeline({
           <div className="flex flex-col items-center">
             <span
               className={`mt-1 h-3 w-3 rounded-full ${
-                phase.active ? "bg-accent" : "border border-line bg-white"
+                phase.active ? "bg-accent" : "border border-line bg-panel"
               }`}
             />
             {i < phases.length - 1 ? (

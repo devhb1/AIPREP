@@ -137,7 +137,7 @@ export function InterviewScorecard({
         <div className="space-y-3">
           <p className="text-sm font-semibold text-ink">Improved answers</p>
           {(report.improvedAnswers ?? []).map((item) => (
-            <article key={item.prompt} className="rounded-xl border border-line bg-white p-3 text-sm">
+            <article key={item.prompt} className="rounded-xl border border-line bg-panel p-3 text-sm">
               <p className="font-medium text-ink">{item.prompt}</p>
               <p className="mt-1 text-muted">You: {item.original}</p>
               <p className="mt-1 text-accent">Try: {item.improved}</p>
@@ -151,7 +151,7 @@ export function InterviewScorecard({
           <p className="text-sm font-semibold text-ink">What to focus on next</p>
           <ul className="mt-2 space-y-2 text-sm">
             {(report.focusRecommendations ?? []).map((rec) => (
-              <li key={rec.topic} className="rounded-xl border border-line bg-white px-3 py-2">
+              <li key={rec.topic} className="rounded-xl border border-line bg-panel px-3 py-2">
                 <p className="font-medium text-ink">{rec.suggestedAction}</p>
                 <p className="mt-0.5 text-muted">
                   {rec.topic}: {rec.reason}

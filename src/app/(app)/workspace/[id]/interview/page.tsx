@@ -250,7 +250,7 @@ export default function InterviewPage() {
         <p className="mt-2 text-sm text-muted">
           {sessions.length === 0
             ? "First panel run — this is the front door of your prep. HR opens, pedagogy probes, GA, then HR closes."
-            : "Voice-first KVS PRT mocks in English, Hindi, or Hinglish — then a real scorecard."}
+            : "Voice-first mocks in English, Hindi, or Hinglish — then a real scorecard."}
         </p>
       </div>
 
@@ -330,7 +330,7 @@ export default function InterviewPage() {
               router.push(`/workspace/${workspaceId}/interview/mock?${q.toString()}`);
             }}
           >
-            Start mock panel →
+            {sessions.length === 0 ? "Start first mock →" : "Start mock panel →"}
           </Button>
           <Button variant="ghost" onClick={() => setShowTextMock(true)}>
             Type instead
@@ -405,7 +405,7 @@ export default function InterviewPage() {
                       className={
                         turn.role === "candidate"
                           ? "ml-4 rounded-xl bg-accent-soft px-4 py-3 text-sm sm:ml-6"
-                          : "mr-4 rounded-xl border border-line bg-white px-4 py-3 text-sm sm:mr-6"
+                          : "mr-4 rounded-xl border border-line bg-panel px-4 py-3 text-sm sm:mr-6"
                       }
                     >
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -426,7 +426,7 @@ export default function InterviewPage() {
                     onChange={(e) => setAnswer(e.target.value)}
                     rows={3}
                     placeholder="Answer as you would in the interview…"
-                    className="min-h-24 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm"
+                    className="min-h-24 flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-sm"
                     disabled={loading}
                   />
                   <button

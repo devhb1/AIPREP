@@ -2,26 +2,20 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "AIPREP Mentor OS",
-    short_name: "AIPREP",
-    description: "KVS PRT interview prep — mentor, research, mocks, voice.",
+    name: "AI Prep — Your AI Interview Mentor",
+    short_name: "AI Prep",
+    description: "Mock interviews, mentor coaching, and an adaptive prep plan.",
     start_url: "/dashboard",
     display: "standalone",
-    background_color: "#eef2f6",
-    theme_color: "#0f766e",
+    background_color: "#f3f6fb",
+    theme_color: "#0d9488",
     orientation: "portrait-primary",
     icons: [
       {
-        src: "/icon-192.png",
-        sizes: "192x192",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/icon-512.png",
+        src: "/aiprep-logo.jpg",
         sizes: "512x512",
-        type: "image/png",
-        purpose: "maskable",
+        type: "image/jpeg",
+        purpose: "any",
       },
     ],
   };
