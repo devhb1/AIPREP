@@ -4,12 +4,12 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-provider";
-import { signUpAction, type AuthActionState } from "@/app/login/actions";
+import { signInAction, type AuthActionState } from "./actions";
 
 const initial: AuthActionState = {};
 
-export default function SignupPage() {
-  const [state, action, pending] = useActionState(signUpAction, initial);
+export function LoginForm({ next }: { next: string }) {
+  const [state, action, pending] = useActionState(signInAction, initial);
 
   return (
     <main className="landing-shell relative flex min-h-[100dvh] w-full items-center justify-center px-5 py-12">
@@ -18,19 +18,12 @@ export default function SignupPage() {
       </div>
       <div className="relative z-10 w-full max-w-md rounded-[var(--radius-card)] border border-line bg-panel p-8 shadow-[var(--shadow-soft)]">
         <BrandMark href="/" size="md" />
-        <h1 className="mt-6 text-3xl text-ink">Create account</h1>
+        <h1 className="mt-6 text-3xl text-ink">Sign in</h1>
         <p className="mt-2 text-sm text-muted">
-          Get a ready-to-use interview prep workspace on first login.
+          Continue preparing with your AI interview mentor.
         </p>
         <form action={action} className="mt-8 space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Full name</span>
-            <input
-              className="w-full rounded-[var(--radius-btn)] border border-line bg-background px-3 py-2 text-ink outline-none ring-accent focus:ring-2"
-              name="fullName"
-              autoComplete="name"
-            />
-          </label>
+          <input type="hidden" name="next" value={next} />
           <label className="block text-sm">
             <span className="mb-1 block text-muted">Email</span>
             <input
@@ -49,27 +42,24 @@ export default function SignupPage() {
               name="password"
               required
               minLength={6}
-              autoComplete="new-password"
+              autoComplete="current-password"
             />
           </label>
           {state.error ? (
             <p className="text-sm text-[var(--danger)]">{state.error}</p>
-          ) : null}
-          {state.message ? (
-            <p className="text-sm text-[var(--ok)]">{state.message}</p>
           ) : null}
           <button
             type="submit"
             disabled={pending}
             className="btn-primary w-full disabled:opacity-60"
           >
-            {pending ? "Creating…" : "Create account"}
+            {pending ? "Signing in…" : "Sign in"}
           </button>
         </form>
         <p className="mt-6 text-sm text-muted">
-          Already registered?{" "}
-          <Link className="font-semibold text-accent" href="/login">
-            Sign in
+          No account?{" "}
+          <Link className="font-semibold text-accent" href="/signup">
+            Create one
           </Link>
         </p>
       </div>

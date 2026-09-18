@@ -60,7 +60,7 @@ export async function generatePracticeSet(params: {
 
   const evidence =
     chunks.map((c, i) => `[#${i + 1}] ${c.content}`).join("\n\n") ||
-    `Topic: ${topic.name}. Create cautious PRT interview practice items and mark grounding as weak.`;
+    `Topic: ${topic.name}. Create cautious teaching-interview practice items and mark grounding as weak.`;
 
   const result = await chatCompletion({
     model: MODELS.fast,
@@ -244,7 +244,18 @@ export async function submitAttempt(params: {
       userId: params.userId,
       questionId: question.id,
       topicId: question.topicId,
-      note: `Incorrect option ${selected.label}: ${selected.content}`,
+      note: [
+        `Q: ${question.prompt}`,
+        `You chose ${selected.label}: ${selected.content}`,
+        question.explanation
+          ? `Why: ${question.explanation}`
+          : "Review the topic evidence in Memory, then retry practice.",
+        options.find((o) => o.isCorrect)
+          ? `Correct: ${options.find((o) => o.isCorrect)!.label}. ${options.find((o) => o.isCorrect)!.content}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
       remediationTaskId,
     });
   }

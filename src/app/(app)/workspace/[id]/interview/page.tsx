@@ -359,6 +359,7 @@ export default function InterviewPage() {
           report={report}
           mode="text"
           judgeMode={judgeMode}
+          workspaceId={workspaceId}
           onClose={() => setReport(null)}
         />
       ) : null}

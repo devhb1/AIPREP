@@ -75,6 +75,16 @@ export default function MemoryPage() {
   const [ledger, setLedger] = useState<LedgerItem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [mentorContext, setMentorContext] = useState<{
+    trustedFacts: number;
+    personalNotes: number;
+    stories: number;
+    readyPdfs: number;
+    processingPdfs: number;
+    pdfChunks: number;
+    inboxClaims: number;
+    summary: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -83,7 +93,7 @@ export default function MemoryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
-  const [view, setView] = useState<"list" | "graph">("graph");
+  const [view, setView] = useState<"list" | "graph">("list");
   const [sheet, setSheet] = useState<null | "menu" | "search" | "upload">(null);
   const [quickQuery, setQuickQuery] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
@@ -107,6 +117,7 @@ export default function MemoryPage() {
       setLedger(data.ledger ?? []);
       setTopics(data.topics ?? []);
       setCounts(data.counts ?? {});
+      setMentorContext(data.mentorContext ?? null);
     } catch {
       setError("Network error");
     } finally {
@@ -237,7 +248,7 @@ export default function MemoryPage() {
       setUploadMsg(
         typeof data.message === "string"
           ? data.message
-          : "Uploaded — indexing in background.",
+          : "Uploaded — extracting text, chunking pages, and embedding into your PDF knowledge. Mentor can use it once status is Ready.",
       );
       setFile(null);
       setTab("documents");
@@ -266,7 +277,8 @@ export default function MemoryPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Memory</h2>
         <p className="mt-2 text-sm text-muted">
-          Ask one question, approve the facts, then use a full campaign only when you need breadth.
+          One ledger for everything the mentor can use — PDFs, approved facts, notes,
+          and research inbox.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Chip active={view === "list"} onClick={() => setView("list")}>
@@ -283,6 +295,39 @@ export default function MemoryPage() {
           </Link>
         </div>
       </div>
+
+      {mentorContext ? (
+        <section className="surface-card space-y-3 border-accent/30">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            What the mentor knows
+          </p>
+          <p className="text-sm leading-relaxed text-muted">{mentorContext.summary}</p>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            {[
+              ["Trusted facts", mentorContext.trustedFacts],
+              ["Ready PDFs", mentorContext.readyPdfs],
+              ["PDF chunks", mentorContext.pdfChunks],
+              ["Inbox (not trusted yet)", mentorContext.inboxClaims],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="rounded-xl border border-line bg-background px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.12em] text-muted">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-ink">{value}</p>
+              </div>
+            ))}
+          </div>
+          {mentorContext.processingPdfs > 0 ? (
+            <p className="text-xs text-muted">
+              {mentorContext.processingPdfs} PDF(s) still processing — text extract →
+              chunks → embeddings. Refresh Memory in a minute.
+            </p>
+          ) : null}
+          <p className="text-xs text-muted">
+            PDF flow: upload → parse pages → split into chunks → embed → available to
+            Mentor / Practice only when status is <span className="font-semibold text-ink">ready</span>.
+            Research claims stay in Inbox until you Approve.
+          </p>
+        </section>
+      ) : null}
 
       <InstallHomeScreenBanner />
 

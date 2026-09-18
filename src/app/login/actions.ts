@@ -1,0 +1,77 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+
+function safeNextPath(raw: FormDataEntryValue | null) {
+  const value = typeof raw === "string" ? raw : "";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/dashboard";
+  if (value.startsWith("/login") || value.startsWith("/signup")) return "/dashboard";
+  return value;
+}
+
+export type AuthActionState = {
+  error?: string;
+  message?: string;
+};
+
+export async function signInAction(
+  _prev: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const next = safeNextPath(formData.get("next"));
+
+  if (!email || !password) {
+    return { error: "Email and password are required." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(next);
+}
+
+export async function signUpAction(
+  _prev: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const fullName = String(formData.get("fullName") ?? "").trim();
+
+  if (!email || !password) {
+    return { error: "Email and password are required." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { full_name: fullName || undefined },
+    },
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (data.session) {
+    revalidatePath("/", "layout");
+    redirect("/dashboard");
+  }
+
+  return {
+    message: "Check your email to confirm your account, then sign in.",
+  };
+}

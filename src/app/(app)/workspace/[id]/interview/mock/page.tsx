@@ -9,6 +9,7 @@ import {
 } from "@/components/interview-scorecard";
 import { Button, Chip } from "@/components/ui";
 import { INTERVIEW_AUDIO_POLICY } from "@/lib/interview/audio-policy";
+import { startWavCapture, type WavCapture } from "@/lib/interview/client-wav";
 
 type Turn = {
   role: "interviewer" | "candidate";
@@ -19,17 +20,6 @@ type Turn = {
 };
 
 type InterviewLanguage = "en" | "hi" | "mix";
-
-function pickRecorderMime() {
-  if (typeof MediaRecorder === "undefined") return "";
-  const candidates = [
-    "audio/mp4",
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg",
-  ];
-  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
-}
 
 async function readJson(res: Response) {
   const text = await res.text();
@@ -67,13 +57,12 @@ export default function MockPanelPage() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ScorecardReport | null>(null);
   const [typed, setTyped] = useState("");
-  const [showType, setShowType] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const wavRef = useRef<WavCapture | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordStartedAt = useRef(0);
 
   useEffect(() => {
     const lang = searchParams.get("lang");
@@ -92,7 +81,7 @@ export default function MockPanelPage() {
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
-      mediaRecorderRef.current?.stop();
+      void wavRef.current?.stop().catch(() => undefined);
     };
   }, []);
 
@@ -201,76 +190,77 @@ export default function MockPanelPage() {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+        },
       });
       streamRef.current = stream;
-      const mimeType = pickRecorderMime();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size) chunksRef.current.push(e.data);
-      };
-      recorder.start(250);
+      wavRef.current = await startWavCapture(stream);
+      recordStartedAt.current = Date.now();
       setStatus("recording");
     } catch (err) {
       setError(
         err instanceof Error
           ? /NotAllowed|Permission/i.test(err.message)
-            ? "Microphone blocked — allow mic, then try again."
+            ? "Microphone blocked — allow mic, or type your answer below."
             : err.message
-          : "Could not open microphone",
+          : "Could not open microphone — type your answer below.",
       );
     }
   }
 
   async function endRecord() {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || !sessionId) return;
-    if (recorder.state === "inactive" && status !== "recording") return;
+    const capture = wavRef.current;
+    if (!capture || !sessionId) return;
+
+    const heldMs = Date.now() - recordStartedAt.current;
+    if (heldMs < 1500) {
+      setError("Hold for at least 2 seconds while speaking, then tap to send.");
+      return;
+    }
 
     setStatus("thinking");
-    const blob: Blob = await new Promise((resolve, reject) => {
-      recorder.onstop = () => {
-        resolve(
-          new Blob(chunksRef.current, {
-            type: recorder.mimeType || "audio/webm",
-          }),
-        );
-      };
-      recorder.onerror = () => reject(new Error("Recording failed"));
-      if (recorder.state !== "inactive") recorder.stop();
+    let blob: Blob;
+    try {
+      blob = await capture.stop();
+    } catch {
+      setStatus("ready");
+      setError("Recording failed — type your answer below.");
+      return;
+    } finally {
+      wavRef.current = null;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
-    });
+    }
 
-    if (blob.size < 800) {
+    // ~16kHz mono 16-bit ≈ 32KB/sec; reject tiny/empty captures.
+    if (blob.size < 8000) {
       setStatus("ready");
-      setError("Recording too short — tap, speak, then tap again.");
+      setError("Recording too quiet/short — speak closer, or type below.");
       return;
     }
 
     try {
+      const file = new File([blob], "answer.wav", { type: "audio/wav" });
       const form = new FormData();
       form.append("workspaceId", workspaceId);
       form.append("sessionId", sessionId);
       form.append("language", language);
-      form.append(
-        "audio",
-        blob,
-        blob.type.includes("mp4") ? "answer.m4a" : "answer.webm",
-      );
+      form.append("audio", file);
       const res = await fetch("/api/interview/voice-turn", { method: "POST", body: form });
       const data = await readJson(res);
       if (!res.ok) {
         throw new Error(typeof data.error === "string" ? data.error : "Turn failed");
       }
+      setError(null);
       applyTurn(data, String(data.transcript ?? ""));
     } catch (err) {
       setStatus("ready");
-      setError(err instanceof Error ? err.message : "Could not process answer");
+      setError(
+        err instanceof Error ? err.message : "Could not process answer — type below.",
+      );
     }
   }
 
@@ -280,6 +270,7 @@ export default function MockPanelPage() {
     const answer = typed.trim();
     setTyped("");
     setStatus("thinking");
+    setError(null);
     try {
       const res = await fetch("/api/interview/voice-turn", {
         method: "POST",
@@ -392,47 +383,42 @@ export default function MockPanelPage() {
           </p>
         ) : null}
 
-        <p className="mt-8 flex-1 text-2xl leading-snug text-ink sm:text-3xl">
+        <p className="mt-6 flex-1 overflow-y-auto text-2xl leading-snug text-ink sm:text-3xl">
           {currentQuestion?.content ?? "…"}
         </p>
 
-        <button
-          type="button"
-          disabled={status === "thinking" || status === "ending"}
-          onClick={() => void toggleRecord()}
-          className={`flex min-h-28 w-full items-center justify-center rounded-[var(--radius-card)] text-base font-semibold text-white ${
-            status === "recording" ? "bg-[var(--danger)]" : "bg-accent"
-          } disabled:opacity-60`}
-        >
-          {status === "recording"
-            ? "Tap to send"
-            : status === "thinking"
-              ? `${personaLabel} is considering…`
-              : "Tap to speak"}
-        </button>
+        <div className="shrink-0 space-y-3 pt-4">
+          <button
+            type="button"
+            disabled={status === "thinking" || status === "ending"}
+            onClick={() => void toggleRecord()}
+            className={`flex min-h-24 w-full items-center justify-center rounded-[var(--radius-card)] text-base font-semibold text-white ${
+              status === "recording" ? "bg-[var(--danger)]" : "bg-accent"
+            } disabled:opacity-60`}
+          >
+            {status === "recording"
+              ? "Tap to send (speak 2+ sec)"
+              : status === "thinking"
+                ? `${personaLabel} is considering…`
+                : "Tap to speak"}
+          </button>
 
-        <button
-          type="button"
-          className="mt-3 min-h-11 text-sm font-semibold text-accent"
-          onClick={() => setShowType((v) => !v)}
-        >
-          {showType ? "Hide keyboard" : "Type instead"}
-        </button>
-
-        {showType ? (
-          <form onSubmit={sendTyped} className="mt-2 flex gap-2">
+          <form onSubmit={sendTyped} className="flex gap-2">
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               disabled={status !== "ready"}
-              placeholder="Type your answer…"
-              className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-background px-3 text-sm text-ink"
+              placeholder="Or type your answer here…"
+              className="min-h-12 flex-1 rounded-[var(--radius-btn)] border border-line bg-panel px-3 text-sm text-ink"
             />
             <Button type="submit" disabled={status !== "ready" || !typed.trim()}>
               Send
             </Button>
           </form>
-        ) : null}
+          <p className="text-center text-xs text-muted">
+            Voice uses WAV capture for reliable transcription. Typing always works.
+          </p>
+        </div>
       </section>
     );
   }
@@ -462,6 +448,7 @@ export default function MockPanelPage() {
           mode="voice"
           language={language}
           judgeMode={judgeMode}
+          workspaceId={workspaceId}
           onClose={() => setReport(null)}
         />
       ) : null}

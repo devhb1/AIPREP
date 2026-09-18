@@ -4,6 +4,26 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  const path = request.nextUrl.pathname;
+  const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
+  const isApi = path.startsWith("/api/");
+  // Manifest/icon fetches often omit cookies → redirecting them to /login
+  // causes a login+manifest storm on every navigation (felt as "stuck/slow").
+  const isPublic =
+    isAuthPage ||
+    path.startsWith("/auth") ||
+    path === "/" ||
+    path === "/manifest.webmanifest" ||
+    path.startsWith("/icon") ||
+    path.startsWith("/apple-icon") ||
+    path.startsWith("/api/health") ||
+    path.startsWith("/api/jobs");
+
+  // Skip auth lookup for public marketing/static-ish routes to keep them fast.
+  if (isPublic && !isAuthPage) {
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -22,26 +42,17 @@ export async function updateSession(request: NextRequest) {
           });
         },
       },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
     },
   );
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isAuthPage = path.startsWith("/login") || path.startsWith("/signup");
-  const isApi = path.startsWith("/api/");
-  // Manifest/icon fetches often omit cookies → redirecting them to /login
-  // causes a login+manifest storm on every navigation (felt as "stuck/slow").
-  const isPublic =
-    isAuthPage ||
-    path.startsWith("/auth") ||
-    path === "/" ||
-    path === "/manifest.webmanifest" ||
-    path.startsWith("/icon") ||
-    path.startsWith("/api/health") ||
-    path.startsWith("/api/jobs");
 
   if (!user && !isPublic) {
     if (isApi) {

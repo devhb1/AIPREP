@@ -92,14 +92,32 @@ export async function POST(request: Request) {
       }
 
       const bytes = Buffer.from(await file.arrayBuffer());
+      // Prefer magic-byte sniff — browsers sometimes send empty File.type.
+      let mimeType = (file.type || "").split(";")[0].trim().toLowerCase();
+      if (bytes.length >= 12) {
+        const head = bytes.subarray(0, 12).toString("ascii");
+        if (head.startsWith("RIFF") && head.includes("WAVE")) mimeType = "audio/wav";
+        else if (bytes[0] === 0x1a && bytes[1] === 0x45) mimeType = "audio/webm";
+      }
+      if (!mimeType) mimeType = "audio/wav";
+      const filename =
+        file.name && /\.(wav|webm|m4a|mp3|mp4|ogg)$/i.test(file.name)
+          ? file.name
+          : mimeType.includes("wav")
+            ? "answer.wav"
+            : mimeType.includes("mp4") || mimeType.includes("m4a")
+              ? "answer.m4a"
+              : mimeType.includes("ogg")
+                ? "answer.ogg"
+                : "answer.webm";
       try {
         const result = await answerTurnVoiceInterview({
           sessionId,
           workspaceId,
           userId: user.id,
           audio: bytes,
-          filename: file.name || "answer.webm",
-          mimeType: file.type || "audio/webm",
+          filename,
+          mimeType,
           language: ["en", "hi", "mix"].includes(language) ? language : "en",
         });
         discardAudioBuffer(bytes);

@@ -28,6 +28,7 @@ type Props = {
   mode?: "voice" | "text";
   language?: string;
   judgeMode?: string;
+  workspaceId?: string;
   speech?: {
     fillerCount?: number;
     elapsedSec?: number;
@@ -57,6 +58,7 @@ export function InterviewScorecard({
   mode = "text",
   language,
   judgeMode,
+  workspaceId,
   speech,
   onClose,
 }: Props) {
@@ -172,6 +174,38 @@ export function InterviewScorecard({
           </ul>
         </div>
       ) : null}
+
+      <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-4">
+        <p className="text-sm font-semibold text-ink">Study guide from this mock</p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted">
+          <li>Read each weakness and the improved answer above out loud once.</li>
+          <li>Open Learn → Practice and generate a set on your weakest topic.</li>
+          <li>Wrong MCQs land in Mistakes with a detailed note — review, then retry.</li>
+          <li>Run another mock when you can give one concrete classroom example per answer.</li>
+        </ol>
+        {workspaceId ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={`/workspace/${workspaceId}/learn/practice`}
+              className="inline-flex min-h-10 items-center rounded-xl bg-accent px-3 text-xs font-semibold text-white dark:text-[#042f2e]"
+            >
+              Practice weak topics →
+            </a>
+            <a
+              href={`/workspace/${workspaceId}/learn/mistakes`}
+              className="inline-flex min-h-10 items-center rounded-xl border border-line bg-panel px-3 text-xs font-semibold text-ink"
+            >
+              Open mistakes
+            </a>
+            <a
+              href={`/workspace/${workspaceId}/interview/mock`}
+              className="inline-flex min-h-10 items-center rounded-xl border border-line bg-panel px-3 text-xs font-semibold text-ink"
+            >
+              Retry mock
+            </a>
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

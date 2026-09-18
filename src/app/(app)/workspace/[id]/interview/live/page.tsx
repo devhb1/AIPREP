@@ -468,6 +468,7 @@ export default function LiveVoiceInterviewPage() {
           mode="voice"
           language={language}
           judgeMode={judgeMode}
+          workspaceId={workspaceId}
           speech={{
             fillerCount: metrics.fillerCount,
             elapsedSec,

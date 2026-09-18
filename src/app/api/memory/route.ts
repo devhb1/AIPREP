@@ -57,7 +57,14 @@ export async function GET(request: Request) {
         (select count(*)::int from personal_stories
           where workspace_id = ${workspaceId}::uuid) as stories,
         (select count(*)::int from documents
-          where workspace_id = ${workspaceId}::uuid) as documents
+          where workspace_id = ${workspaceId}::uuid) as documents,
+        (select count(*)::int from documents
+          where workspace_id = ${workspaceId}::uuid and status = 'ready') as documents_ready,
+        (select count(*)::int from documents
+          where workspace_id = ${workspaceId}::uuid
+            and status in ('uploaded','processing','queued')) as documents_processing,
+        (select count(*)::int from document_chunks
+          where workspace_id = ${workspaceId}::uuid) as document_chunks
     `),
     db
       .select({
@@ -97,6 +104,9 @@ export async function GET(request: Request) {
     notes: Number(countsRaw.notes ?? 0),
     stories: Number(countsRaw.stories ?? 0),
     documents: Number(countsRaw.documents ?? 0),
+    documentsReady: Number(countsRaw.documents_ready ?? 0),
+    documentsProcessing: Number(countsRaw.documents_processing ?? 0),
+    documentChunks: Number(countsRaw.document_chunks ?? 0),
     all: 0,
   };
   counts.all =
@@ -261,6 +271,18 @@ export async function GET(request: Request) {
       (a, b) => b.claimCount + b.memoryCount - (a.claimCount + a.memoryCount),
     ),
     counts,
+    mentorContext: {
+      trustedFacts: counts.approved,
+      personalNotes: counts.notes,
+      stories: counts.stories,
+      readyPdfs: counts.documentsReady,
+      processingPdfs: counts.documentsProcessing,
+      pdfChunks: counts.documentChunks,
+      inboxClaims: counts.scraped,
+      usesSharedKb: true,
+      summary:
+        "Mentor answers retrieve: (1) facts you approved, (2) text chunks from ready PDFs, (3) shared AI Prep knowledge base. Inbox research stays out until you approve it.",
+    },
   });
 }
 

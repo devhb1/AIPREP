@@ -48,13 +48,13 @@ function createDb() {
     ? connectionString
     : `${connectionString}${connectionString.includes("?") ? "&" : "?"}sslmode=require`;
 
-  // Serverless: ONE connection per isolate. max:10 × N lambdas = EMAXCONNSESSION.
+  // Dev + serverless: keep a tiny pool so one long AI call can't block auth/pages.
   const client = postgres(withSsl, {
     prepare: false,
-    max: 1,
+    max: process.env.NODE_ENV === "development" ? 3 : 1,
     idle_timeout: 20,
     max_lifetime: 60 * 5,
-    connect_timeout: 10,
+    connect_timeout: 8,
     ssl: "require",
   });
 

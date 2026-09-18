@@ -88,6 +88,7 @@ export default function ScorecardPage() {
           mode={session.mode === "voice" ? "voice" : "text"}
           language={session.speechMetrics?.language}
           judgeMode={session.judgeMode}
+          workspaceId={workspaceId}
           speech={
             session.mode === "voice"
               ? {

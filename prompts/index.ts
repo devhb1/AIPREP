@@ -57,12 +57,13 @@ Return STRICT JSON:
 Rules: do not invent official syllabus items absent from evidence; if evidence is thin, stick to broadly known PRT interview themes and mark descriptions cautiously.
 Prompt-version: ${PROMPT_VERSION}`;
 
-export const practiceMcqSystem = `Create MCQ practice questions grounded in evidence.
+export const practiceMcqSystem = `Create MCQ practice questions grounded in evidence for a teaching interview.
 Return STRICT JSON:
 {"questions":[{"prompt":"...","explanation":"...","difficulty":"medium","groundingNote":"...","options":[{"label":"A","content":"...","isCorrect":true},{"label":"B","content":"...","isCorrect":false},{"label":"C","content":"...","isCorrect":false},{"label":"D","content":"...","isCorrect":false}]}]}
 Rules:
 - Exactly one correct option per question.
 - Do not invent official facts absent from evidence.
+- Prefer generic teaching-interview wording; do not force a specific exam board name unless evidence uses it.
 - If evidence is weak, ask conceptual pedagogy questions and say so in groundingNote.
 Prompt-version: ${PROMPT_VERSION}`;
 
