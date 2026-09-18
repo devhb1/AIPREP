@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getAuthCallbackUrl } from "@/lib/app-url";
 import { createClient } from "@/lib/supabase/server";
 
 function safeNextPath(raw: FormDataEntryValue | null) {
@@ -59,6 +60,7 @@ export async function signUpAction(
     password,
     options: {
       data: { full_name: fullName || undefined },
+      emailRedirectTo: getAuthCallbackUrl(),
     },
   });
 

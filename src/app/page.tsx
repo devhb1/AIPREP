@@ -4,7 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-provider";
 
-export default async function HomePage() {
+type Props = {
+  searchParams: Promise<{ code?: string; next?: string }>;
+};
+
+export default async function HomePage({ searchParams }: Props) {
+  const params = await searchParams;
+  // Supabase Site URL often lands confirm links on /?code=… — forward to callback.
+  if (params.code) {
+    const next = params.next ? `&next=${encodeURIComponent(params.next)}` : "";
+    redirect(`/auth/callback?code=${encodeURIComponent(params.code)}${next}`);
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
