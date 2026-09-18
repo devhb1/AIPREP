@@ -29,7 +29,8 @@ export async function getWorkspaceBootstrap(params: {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
-  const [docStats, spendRows, settings, nextBestAction] = await Promise.all([
+  // Sequential-friendly batch: NBA already hits documents/claims; keep extras small.
+  const [docStats, spendRows, settings] = await Promise.all([
     db
       .select({
         total: count(),
@@ -54,11 +55,12 @@ export async function getWorkspaceBootstrap(params: {
       .from(workspaceSettings)
       .where(eq(workspaceSettings.workspaceId, params.workspaceId))
       .limit(1),
-    computeNextBestAction({
-      workspaceId: params.workspaceId,
-      userId: params.userId,
-    }),
   ]);
+
+  const nextBestAction = await computeNextBestAction({
+    workspaceId: params.workspaceId,
+    userId: params.userId,
+  });
 
   const statsRow = docStats[0];
   const days = daysUntil(workspace.interviewDate ?? workspace.examDate);

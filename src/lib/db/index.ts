@@ -2,14 +2,43 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-/** Prefer Session pooler on Vercel (IPv4). Direct db.*.supabase.co is often unresolvable there. */
+/**
+ * Prefer pooler URLs on Vercel (IPv4).
+ * Session mode (port 5432) caps ~15 clients and blows up under serverless
+ * (EMAXCONNSESSION). Prefer transaction mode (port 6543) when possible.
+ */
 export function resolveDatabaseUrl() {
-  const direct = process.env.DATABASE_URL?.trim();
+  const transaction = process.env.TRANSACTION_POOLER_URL?.trim();
   const pooler = process.env.SESSION_POOLER_URL?.trim();
+  const direct = process.env.DATABASE_URL?.trim();
 
-  if (pooler) return pooler;
-  if (direct) return direct;
-  throw new Error("DATABASE_URL (or SESSION_POOLER_URL) is not set");
+  const raw = transaction || pooler || direct;
+  if (!raw) {
+    throw new Error(
+      "DATABASE_URL (or SESSION_POOLER_URL / TRANSACTION_POOLER_URL) is not set",
+    );
+  }
+
+  return preferTransactionPooler(raw);
+}
+
+/** Rewrite Supabase pooler :5432 (session) → :6543 (transaction) for serverless. */
+function preferTransactionPooler(url: string) {
+  try {
+    const u = new URL(url);
+    const isPooler = /\.pooler\.supabase\.com$/i.test(u.hostname);
+    if (isPooler && (u.port === "5432" || u.port === "")) {
+      u.port = "6543";
+      // pgbouncer transaction mode requires this for many ORMs
+      if (!u.searchParams.has("pgbouncer")) {
+        u.searchParams.set("pgbouncer", "true");
+      }
+      return u.toString();
+    }
+  } catch {
+    // keep original
+  }
+  return url;
 }
 
 function createDb() {
@@ -19,9 +48,13 @@ function createDb() {
     ? connectionString
     : `${connectionString}${connectionString.includes("?") ? "&" : "?"}sslmode=require`;
 
+  // Serverless: ONE connection per isolate. max:10 × N lambdas = EMAXCONNSESSION.
   const client = postgres(withSsl, {
     prepare: false,
-    max: 10,
+    max: 1,
+    idle_timeout: 20,
+    max_lifetime: 60 * 5,
+    connect_timeout: 10,
     ssl: "require",
   });
 
@@ -35,10 +68,9 @@ const globalForDb = globalThis as unknown as {
   __aiprepDb?: ReturnType<typeof createDb>;
 };
 
+// Cache in ALL envs — without this, every Vercel lambda cold-start opens a new pool.
 const instance = globalForDb.__aiprepDb ?? createDb();
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__aiprepDb = instance;
-}
+globalForDb.__aiprepDb = instance;
 
 export const db = instance.db;
 export const sql = instance.client;

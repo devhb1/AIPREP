@@ -17,7 +17,7 @@ import { approveClaim, rejectClaim } from "@/lib/memory/approval";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
-    .select()
+    .select({ id: workspaces.id })
     .from(workspaces)
     .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, userId)))
     .limit(1);
@@ -38,164 +38,184 @@ export async function GET(request: Request) {
   const workspace = await assertWorkspace(user.id, workspaceId);
   if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const inboxClaims = await db
-    .select()
-    .from(claims)
-    .where(
-      and(
-        eq(claims.workspaceId, workspaceId),
-        inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
-      ),
-    )
-    .orderBy(desc(claims.createdAt))
-    .limit(40);
+  // Counts + topics in a tight parallel batch (single pooled connection queues them).
+  const [countRows, topicRows, memoryTopics] = await Promise.all([
+    db.execute(dsql`
+      select
+        (select count(*)::int from claims
+          where workspace_id = ${workspaceId}::uuid
+            and status in ('CANDIDATE','CONFLICTING')) as scraped,
+        (select count(*)::int from memory_items
+          where workspace_id = ${workspaceId}::uuid
+            and deleted_at is null
+            and status = 'USER_APPROVED') as approved,
+        (select count(*)::int from memory_items
+          where workspace_id = ${workspaceId}::uuid
+            and deleted_at is null
+            and (status = 'PERSONAL_NOTE' or source_kind = 'note')) as notes,
+        (select count(*)::int from personal_stories
+          where workspace_id = ${workspaceId}::uuid) as stories,
+        (select count(*)::int from documents
+          where workspace_id = ${workspaceId}::uuid) as documents
+    `),
+    db
+      .select({
+        topic: claims.topic,
+        count: dsql<number>`count(*)::int`,
+      })
+      .from(claims)
+      .where(
+        and(
+          eq(claims.workspaceId, workspaceId),
+          dsql`${claims.topic} is not null`,
+        ),
+      )
+      .groupBy(claims.topic)
+      .limit(20),
+    db
+      .select({
+        topicId: memoryItems.topicId,
+        count: dsql<number>`count(*)::int`,
+      })
+      .from(memoryItems)
+      .where(
+        and(
+          eq(memoryItems.workspaceId, workspaceId),
+          isNull(memoryItems.deletedAt),
+          dsql`${memoryItems.topicId} is not null`,
+        ),
+      )
+      .groupBy(memoryItems.topicId)
+      .limit(20),
+  ]);
 
-  const claimIds = inboxClaims.map((c) => c.id);
-  const allSourceLinks =
-    claimIds.length === 0
-      ? []
-      : await db
-          .select({
-            claimId: claimSources.claimId,
-            title: sources.title,
-            url: sources.url,
-            sourceType: sources.sourceType,
-            qualityScore: sources.qualityScore,
-            excerpt: claimSources.excerpt,
-          })
-          .from(claimSources)
-          .leftJoin(sources, eq(sources.id, claimSources.sourceId))
-          .where(inArray(claimSources.claimId, claimIds));
+  const countsRaw = (countRows as unknown as Array<Record<string, number>>)[0] ?? {};
+  const counts = {
+    scraped: Number(countsRaw.scraped ?? 0),
+    approved: Number(countsRaw.approved ?? 0),
+    notes: Number(countsRaw.notes ?? 0),
+    stories: Number(countsRaw.stories ?? 0),
+    documents: Number(countsRaw.documents ?? 0),
+    all: 0,
+  };
+  counts.all =
+    counts.scraped +
+    counts.approved +
+    counts.notes +
+    counts.stories +
+    counts.documents;
 
-  const sourcesByClaim = new Map<string, typeof allSourceLinks>();
-  for (const link of allSourceLinks) {
-    const list = sourcesByClaim.get(link.claimId) ?? [];
-    list.push(link);
-    sourcesByClaim.set(link.claimId, list);
-  }
-
-  const claimsWithSources = inboxClaims.map((claim) => ({
-    ...claim,
-    sources: sourcesByClaim.get(claim.id) ?? [],
-    kind: "claim" as const,
-  }));
-
-  const memory = await db
-    .select()
-    .from(memoryItems)
-    .where(and(eq(memoryItems.workspaceId, workspaceId), isNull(memoryItems.deletedAt)))
-    .orderBy(desc(memoryItems.updatedAt));
-
-  const stories = await db
-    .select()
-    .from(personalStories)
-    .where(eq(personalStories.workspaceId, workspaceId))
-    .orderBy(desc(personalStories.createdAt));
-
-  const docs = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      status: documents.status,
-      pageCount: documents.pageCount,
-      createdAt: documents.createdAt,
-    })
-    .from(documents)
-    .where(eq(documents.workspaceId, workspaceId))
-    .orderBy(desc(documents.createdAt));
-
-  const topicRows = await db
-    .select({
-      topic: claims.topic,
-      count: dsql<number>`count(*)::int`,
-    })
-    .from(claims)
-    .where(eq(claims.workspaceId, workspaceId))
-    .groupBy(claims.topic);
-
-  const memoryTopics = await db
-    .select({
-      topicId: memoryItems.topicId,
-      count: dsql<number>`count(*)::int`,
-    })
-    .from(memoryItems)
-    .where(and(eq(memoryItems.workspaceId, workspaceId), isNull(memoryItems.deletedAt)))
-    .groupBy(memoryItems.topicId);
-
-  const links = await db
-    .select()
-    .from(memoryLinks)
-    .where(eq(memoryLinks.workspaceId, workspaceId))
-    .orderBy(desc(memoryLinks.createdAt))
-    .limit(50);
-
-  const topicGraph = [
-    ...topicRows
-      .filter((t) => t.topic)
-      .map((t) => ({
-        topic: t.topic as string,
-        claimCount: Number(t.count),
-        memoryCount: 0,
-        kind: "claim_topic" as const,
-      })),
-    ...memoryTopics
-      .filter((t) => t.topicId)
-      .map((t) => ({
-        topic: t.topicId as string,
-        claimCount: 0,
-        memoryCount: Number(t.count),
-        kind: "memory_topic" as const,
-      })),
-  ];
-
-  // merge same topic labels
   const mergedTopics = new Map<
     string,
     { topic: string; claimCount: number; memoryCount: number }
   >();
-  for (const row of topicGraph) {
-    const prev = mergedTopics.get(row.topic) ?? {
-      topic: row.topic,
+  for (const t of topicRows) {
+    if (!t.topic) continue;
+    mergedTopics.set(t.topic, {
+      topic: t.topic,
+      claimCount: Number(t.count),
+      memoryCount: 0,
+    });
+  }
+  for (const t of memoryTopics) {
+    if (!t.topicId) continue;
+    const prev = mergedTopics.get(t.topicId) ?? {
+      topic: t.topicId,
       claimCount: 0,
       memoryCount: 0,
     };
-    prev.claimCount += row.claimCount;
-    prev.memoryCount += row.memoryCount;
-    mergedTopics.set(row.topic, prev);
+    prev.memoryCount += Number(t.count);
+    mergedTopics.set(t.topicId, prev);
   }
 
   let ledger: Array<Record<string, unknown>> = [];
+
   if (tab === "scraped" || tab === "all") {
+    const inboxClaims = await db
+      .select()
+      .from(claims)
+      .where(
+        and(
+          eq(claims.workspaceId, workspaceId),
+          inArray(claims.status, ["CANDIDATE", "CONFLICTING"]),
+        ),
+      )
+      .orderBy(desc(claims.createdAt))
+      .limit(tab === "all" ? 20 : 40);
+
+    const claimIds = inboxClaims.map((c) => c.id);
+    const allSourceLinks =
+      claimIds.length === 0
+        ? []
+        : await db
+            .select({
+              claimId: claimSources.claimId,
+              title: sources.title,
+              url: sources.url,
+              sourceType: sources.sourceType,
+              qualityScore: sources.qualityScore,
+              excerpt: claimSources.excerpt,
+            })
+            .from(claimSources)
+            .leftJoin(sources, eq(sources.id, claimSources.sourceId))
+            .where(inArray(claimSources.claimId, claimIds));
+
+    const sourcesByClaim = new Map<string, typeof allSourceLinks>();
+    for (const link of allSourceLinks) {
+      const list = sourcesByClaim.get(link.claimId) ?? [];
+      list.push(link);
+      sourcesByClaim.set(link.claimId, list);
+    }
+
     ledger = [
       ...ledger,
-      ...claimsWithSources.map((c) => ({
-        ...c,
+      ...inboxClaims.map((claim) => ({
+        ...claim,
+        sources: sourcesByClaim.get(claim.id) ?? [],
+        kind: "claim" as const,
         ledgerKind: "scraped",
       })),
     ];
   }
-  if (tab === "approved" || tab === "all") {
-    ledger = [
-      ...ledger,
-      ...memory
-        .filter((m) => m.status === "USER_APPROVED" || m.namespace === "trusted")
-        .map((m) => ({ ...m, ledgerKind: "approved", kind: "memory" })),
-    ];
+
+  if (tab === "approved" || tab === "notes" || tab === "all") {
+    const memory = await db
+      .select()
+      .from(memoryItems)
+      .where(and(eq(memoryItems.workspaceId, workspaceId), isNull(memoryItems.deletedAt)))
+      .orderBy(desc(memoryItems.updatedAt))
+      .limit(60);
+
+    if (tab === "approved" || tab === "all") {
+      ledger = [
+        ...ledger,
+        ...memory
+          .filter((m) => m.status === "USER_APPROVED" || m.namespace === "trusted")
+          .map((m) => ({ ...m, ledgerKind: "approved", kind: "memory" })),
+      ];
+    }
+    if (tab === "notes" || tab === "all") {
+      ledger = [
+        ...ledger,
+        ...memory
+          .filter(
+            (m) =>
+              m.status === "PERSONAL_NOTE" ||
+              m.namespace === "preferences" ||
+              m.sourceKind === "note",
+          )
+          .map((m) => ({ ...m, ledgerKind: "notes", kind: "memory" })),
+      ];
+    }
   }
-  if (tab === "notes" || tab === "all") {
-    ledger = [
-      ...ledger,
-      ...memory
-        .filter(
-          (m) =>
-            m.status === "PERSONAL_NOTE" ||
-            m.namespace === "preferences" ||
-            m.sourceKind === "note",
-        )
-        .map((m) => ({ ...m, ledgerKind: "notes", kind: "memory" })),
-    ];
-  }
+
   if (tab === "stories" || tab === "all") {
+    const stories = await db
+      .select()
+      .from(personalStories)
+      .where(eq(personalStories.workspaceId, workspaceId))
+      .orderBy(desc(personalStories.createdAt))
+      .limit(30);
     ledger = [
       ...ledger,
       ...stories.map((s) => ({
@@ -207,7 +227,20 @@ export async function GET(request: Request) {
       })),
     ];
   }
+
   if (tab === "documents" || tab === "all") {
+    const docs = await db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        status: documents.status,
+        pageCount: documents.pageCount,
+        createdAt: documents.createdAt,
+      })
+      .from(documents)
+      .where(eq(documents.workspaceId, workspaceId))
+      .orderBy(desc(documents.createdAt))
+      .limit(30);
     ledger = [
       ...ledger,
       ...docs.map((d) => ({
@@ -223,28 +256,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     tab,
     ledger,
-    claims: claimsWithSources,
-    memory,
-    stories,
-    documents: docs,
     topics: Array.from(mergedTopics.values()).sort(
       (a, b) => b.claimCount + b.memoryCount - (a.claimCount + a.memoryCount),
     ),
-    links,
-    counts: {
-      scraped: claimsWithSources.length,
-      approved: memory.filter((m) => m.status === "USER_APPROVED").length,
-      notes: memory.filter(
-        (m) => m.status === "PERSONAL_NOTE" || m.sourceKind === "note",
-      ).length,
-      stories: stories.length,
-      documents: docs.length,
-      all:
-        claimsWithSources.length +
-        memory.length +
-        stories.length +
-        docs.length,
-    },
+    counts,
   });
 }
 

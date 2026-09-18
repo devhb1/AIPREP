@@ -6,7 +6,9 @@
   - Auth email enabled
   - `vector` extension enabled
   - private Storage bucket `documents`
-  - **Session pooler** `DATABASE_URL` (IPv4)
+  - **Transaction pooler** `DATABASE_URL` or `TRANSACTION_POOLER_URL` (port **6543**, IPv4).
+    Do **not** use Session mode (port 5432) on Vercel — it caps ~15 clients and causes
+    `EMAXCONNSESSION` under serverless concurrency. The app rewrites pooler `:5432` → `:6543` when possible.
 - Upstash Redis REST URL + token
 - OpenAI API key with chat, embeddings, web_search, and (optional) Realtime access
 - All migrations applied (`001`–`009`):
@@ -15,11 +17,13 @@
 npm run db:migrate
 ```
 
-If the direct DB host fails (IPv6), use the **Session pooler** connection string, or paste the SQL files into the Supabase SQL Editor in order.
+If the direct DB host fails (IPv6), use the **Transaction pooler** (port 6543) connection string, or paste the SQL files into the Supabase SQL Editor in order.
 
 **One-shot SQL Editor fallback:** paste `db/manual/ALL_for_sql_editor.sql` into Supabase → SQL Editor → Run. Then create a private Storage bucket named `documents` if it does not exist.
 
-**If pooler says password authentication failed:** Database Settings → reset database password → put the new password (URL-encoded) into the Session pooler URI in `.env` / Vercel.
+**If pooler says password authentication failed:** Database Settings → reset database password → put the new password (URL-encoded) into the Transaction pooler URI in `.env` / Vercel.
+
+**If you see `EMAXCONNSESSION` / max clients pool_size: 15:** you are on Session mode. Switch Vercel `DATABASE_URL` / `SESSION_POOLER_URL` to Transaction mode (`*.pooler.supabase.com:6543`) or set `TRANSACTION_POOLER_URL`. Redeploy after changing env.
 
 ## 2. Vercel project
 
@@ -34,6 +38,7 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 DATABASE_URL
+TRANSACTION_POOLER_URL
 SESSION_POOLER_URL
 UPSTASH_REDIS_REST_URL
 UPSTASH_REDIS_REST_TOKEN
