@@ -1,0 +1,117 @@
+{
+  "examKey": "kvs_prt_2026",
+  "items": [
+    {
+      "category": "official",
+      "title": "KVS is an autonomous body under MoE",
+      "body": "Kendriya Vidyalaya Sangathan (KVS) is an autonomous organisation under the Ministry of Education, Government of India. It runs Kendriya Vidyalayas across the country. Always treat the latest recruitment notification on the official site as the source of truth for a given cycle.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "official",
+      "title": "PRT means Primary Teacher",
+      "body": "PRT in KVS recruitment refers to Primary Teacher posts, typically associated with primary classes. Exact class range, pay level, and subject combination for a vacancy are stated in that cycle's official notification, not in unofficial Telegram forwards.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "official",
+      "title": "Use the official KVS website for notifications",
+      "body": "Recruitment advertisements, application windows, admit cards, and result notices are published through official KVS / Government of India channels (notably kvsangathan.nic.in). Do not treat coaching-site summaries as final eligibility or document lists.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "official",
+      "title": "Eligibility and age relaxation are notification-specific",
+      "body": "Age limits, educational qualifications, CTET/TET requirements, and category-wise age relaxation (SC/ST/OBC/EWS/PwBD/ex-servicemen) follow the Government of India rules as written in the specific KVS recruitment notification. Do not memorise a number from a previous year as if it still applies.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "logistics",
+      "title": "Document verification is part of selection",
+      "body": "KVS teaching recruitment typically includes verification of original certificates (education, category, TET/CTET where required, identity, and experience if claimed). Carry originals plus photocopies and photo ID as listed on the interview/document-verification call letter for that cycle.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "logistics",
+      "title": "Rely on the call letter, not hearsay",
+      "body": "Venue, reporting time, documents, and whether a teaching demonstration is required are specified on the official interview/document verification call letter. If a coaching note conflicts with the call letter, the call letter wins.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "interview",
+      "title": "Panel commonly probes pedagogy with classroom examples",
+      "body": "KVS PRT interviews historically emphasise Child Development and Pedagogy: how you would teach a concept, handle mixed-ability learners, and keep a primary classroom inclusive. Answers should include a concrete classroom example, not only theory names.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "interview",
+      "title": "Teaching demonstration is often expected",
+      "body": "Many KVS teaching interviews include or are followed by a short teaching demonstration. Prepare a 5–8 minute primary lesson with a learning outcome, one activity, and a quick check for understanding. Keep language simple and child-centred.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "interview",
+      "title": "Interview language can be English or Hindi",
+      "body": "Candidates may be asked questions in English, Hindi, or a mix, depending on the panel. Clarity and a classroom example matter more than ornate vocabulary. If you switch languages, stay consistent within an answer.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "historical",
+      "title": "Previous cycles mixed written exam and interview",
+      "body": "Recent KVS teaching recruitments have often combined a computer-based written exam with a later interview / document verification stage. Weightage between written and interview, if any, is defined only in that cycle's notification. Do not assume last year's ratio still applies.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "historical",
+      "title": "Classroom management questions repeat across years",
+      "body": "Candidates from previous cycles commonly report questions on slow learners, large class sizes, inclusive education, and how you would start a lesson in EVS, language, or primary maths. Treat these as practice themes, not leaked papers.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "pyq",
+      "title": "Common theme: slow learner in a large class",
+      "body": "A frequent PRT interview prompt is: how will you support a child who is struggling while the rest of the class moves ahead? A grounded answer names diagnosis (what the child cannot yet do), a simple scaffold, peer support, and how you still protect the child's dignity.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "pyq",
+      "title": "Common theme: NEP 2020 in a primary classroom",
+      "body": "Panels often ask how NEP 2020 ideas show up in Class 1–5: foundational literacy and numeracy, competency-based tasks, mother-tongue comfort, and reduced rote. Answer with one activity you would actually run, not a list of policy slogans.",
+      "sourceUrl": "https://dsel.education.gov.in/nep2020",
+      "sourceTitle": "Ministry of Education — NEP 2020"
+    },
+    {
+      "category": "pyq",
+      "title": "Common theme: inclusive education",
+      "body": "Expect questions on children with disabilities, multilingual classrooms, and gender-sensitive grouping. A strong answer names one adjustment (seating, extra time, visual support, buddy system) and how you check that it worked.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "interview",
+      "title": "Subject knowledge is taught through pedagogy",
+      "body": "For PRT, EVS, language, and maths questions are usually asked as 'how would you teach this to Class 3?' rather than as pure content quizzes. Prepare one demo each for a language poem, an EVS local-environment topic, and a primary maths concept with concrete objects.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    },
+    {
+      "category": "logistics",
+      "title": "Arrive early with printed papers and photo ID",
+      "body": "On interview day, reach the venue early with the printed call letter, photo identity proof, photographs as specified, and the document file listed in the instructions. Keep a simple water bottle and avoid last-minute certificate printouts at a cyber cafe.",
+      "sourceUrl": "https://kvsangathan.nic.in/",
+      "sourceTitle": "Kendriya Vidyalaya Sangathan"
+    }
+  ]
+}

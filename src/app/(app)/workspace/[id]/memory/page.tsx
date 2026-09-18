@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { uploadPdfToWorkspace } from "@/lib/documents/client-upload";
 import { InstallHomeScreenBanner } from "@/components/install-banner";
 import { PdfPickButton } from "@/components/pdf-pick-button";
+import { MemoryGraph, type GraphEdge, type GraphNode } from "@/components/memory-graph";
 
 type Tab = "all" | "scraped" | "approved" | "notes" | "stories" | "documents";
 
@@ -32,6 +33,21 @@ type LedgerItem = {
 };
 
 type Topic = { topic: string; claimCount: number; memoryCount: number };
+
+type QuickClaim = {
+  id: string;
+  statement: string;
+  topic?: string | null;
+  confidence?: number | null;
+  assessment?: string | null;
+};
+
+type QuickResult = {
+  synthesizedAnswer: string;
+  claims: QuickClaim[];
+  hits?: Array<{ title: string; url: string }>;
+  cached?: boolean;
+};
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "all", label: "All" },
@@ -66,6 +82,13 @@ export default function MemoryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "graph">("list");
+  const [quickQuery, setQuickQuery] = useState("");
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
+  const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
 
   async function load(nextTab = tab) {
     setLoading(true);
@@ -89,9 +112,27 @@ export default function MemoryPage() {
     }
   }
 
+  async function loadGraph() {
+    setGraphLoading(true);
+    try {
+      const res = await fetch(`/api/memory/graph?workspaceId=${workspaceId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setGraphNodes(data.nodes ?? []);
+        setGraphEdges(data.edges ?? []);
+      }
+    } finally {
+      setGraphLoading(false);
+    }
+  }
+
   useEffect(() => {
     void load(tab);
   }, [workspaceId, tab]);
+
+  useEffect(() => {
+    if (view === "graph") void loadGraph();
+  }, [workspaceId, view]);
 
   const total = useMemo(() => {
     const scraped = counts.scraped ?? 0;
@@ -120,7 +161,47 @@ export default function MemoryPage() {
       router.push(data.redirect);
       return;
     }
+    if (body.action === "approve" || body.action === "reject") {
+      const claimId = body.claimId;
+      setQuickResult((prev) =>
+        prev && typeof claimId === "string"
+          ? { ...prev, claims: prev.claims.filter((c) => c.id !== claimId) }
+          : prev,
+      );
+    }
     await load();
+    if (view === "graph") await loadGraph();
+  }
+
+  async function runQuickSearch(e: FormEvent) {
+    e.preventDefault();
+    const query = quickQuery.trim();
+    if (query.length < 8) {
+      setError("Ask a fuller question (at least 8 characters).");
+      return;
+    }
+    setQuickBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/memory/quick-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, query }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Quick search failed");
+        return;
+      }
+      setQuickResult(data);
+      setTab("scraped");
+      router.replace("?tab=scraped", { scroll: false });
+      await load("scraped");
+    } catch {
+      setError("Network error");
+    } finally {
+      setQuickBusy(false);
+    }
   }
 
   async function addNote(e: FormEvent) {
@@ -176,20 +257,132 @@ export default function MemoryPage() {
         </Link>
         <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Memory</h2>
         <p className="mt-2 text-sm text-muted">
-          Single ledger — research claims, trusted facts, notes, stories, PDFs.
+          Ask one question, approve the facts, then use a full campaign only when you need breadth.
         </p>
-        <Link
-          href={`/workspace/${workspaceId}/research`}
-          className="mt-2 inline-block text-sm font-semibold text-accent"
-        >
-          Run a research campaign →
-        </Link>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`min-h-11 rounded-xl px-4 text-sm font-semibold ${
+              view === "list" ? "bg-accent text-white" : "border border-line bg-panel"
+            }`}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("graph")}
+            className={`min-h-11 rounded-xl px-4 text-sm font-semibold ${
+              view === "graph" ? "bg-accent text-white" : "border border-line bg-panel"
+            }`}
+          >
+            Graph
+          </button>
+          <Link
+            href={`/workspace/${workspaceId}/research`}
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-accent"
+          >
+            Full research campaign →
+          </Link>
+        </div>
       </div>
 
       <InstallHomeScreenBanner />
 
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <h3 className="text-lg text-ink">Ask & save a fact</h3>
+        <p className="mt-1 text-sm text-muted">
+          One web search. Approve, save unconfirmed, or reject — same inbox as a campaign.
+        </p>
+        <form onSubmit={runQuickSearch} className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            value={quickQuery}
+            onChange={(e) => setQuickQuery(e.target.value)}
+            placeholder="What’s the KVS PRT age relaxation for OBC candidates?"
+            className="min-h-11 flex-1 rounded-xl border border-line px-3 py-2 text-sm"
+            disabled={quickBusy}
+          />
+          <button
+            type="submit"
+            disabled={quickBusy || quickQuery.trim().length < 8}
+            className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {quickBusy ? "Searching…" : "Search"}
+          </button>
+        </form>
+        {quickResult ? (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-xl bg-white p-3 text-sm text-ink">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                Answer{quickResult.cached ? " · cached" : ""}
+              </p>
+              <p className="whitespace-pre-wrap">{quickResult.synthesizedAnswer}</p>
+            </div>
+            {quickResult.claims.map((claim) => (
+              <article key={claim.id} className="rounded-xl border border-line bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                  Candidate fact{claim.topic ? ` · ${claim.topic}` : ""}
+                </p>
+                <p className="mt-2 text-sm text-ink">{claim.statement}</p>
+                {claim.assessment ? (
+                  <p className="mt-1 text-xs text-muted">{claim.assessment}</p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busyId === claim.id}
+                    onClick={() =>
+                      void act(
+                        { action: "approve", claimId: claim.id, mode: "trusted" },
+                        claim.id,
+                      )
+                    }
+                    className="min-h-10 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === claim.id}
+                    onClick={() =>
+                      void act(
+                        { action: "approve", claimId: claim.id, mode: "unconfirmed" },
+                        claim.id,
+                      )
+                    }
+                    className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                  >
+                    Save unconfirmed
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === claim.id}
+                    onClick={() =>
+                      void act({ action: "reject", claimId: claim.id }, claim.id)
+                    }
+                    className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold text-[var(--danger)] disabled:opacity-60"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      {view === "graph" ? (
+        graphLoading ? (
+          <div className="h-48 animate-pulse rounded-2xl border border-line bg-panel" />
+        ) : (
+          <MemoryGraph nodes={graphNodes} edges={graphEdges} />
+        )
+      ) : null}
+
+      {view === "list" ? (
+        <>
       <section className="rounded-2xl border border-line bg-panel p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-ink">Trust mix</h3>
@@ -389,6 +582,19 @@ export default function MemoryPage() {
                           type="button"
                           disabled={busyId === item.id}
                           onClick={() =>
+                            void act(
+                              { action: "approve", claimId: item.id, mode: "unconfirmed" },
+                              item.id,
+                            )
+                          }
+                          className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                        >
+                          Save unconfirmed
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyId === item.id}
+                          onClick={() =>
                             void act({ action: "reject", claimId: item.id }, item.id)
                           }
                           className="min-h-10 rounded-xl border border-line px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
@@ -550,6 +756,8 @@ export default function MemoryPage() {
           </form>
         </section>
       )}
+        </>
+      ) : null}
     </main>
   );
 }

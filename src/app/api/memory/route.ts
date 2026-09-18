@@ -280,6 +280,7 @@ const actionSchema = z.object({
   title: z.string().optional(),
   content: z.string().optional(),
   topic: z.string().optional(),
+  mode: z.enum(["trusted", "unconfirmed", "note"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -312,7 +313,7 @@ export async function POST(request: Request) {
       claimId: parsed.data.claimId,
       userId: user.id,
       workspaceId,
-      mode: "trusted",
+      mode: parsed.data.mode ?? "trusted",
     });
     await invalidateNba(workspaceId);
     return NextResponse.json({ memory });

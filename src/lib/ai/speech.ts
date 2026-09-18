@@ -59,7 +59,7 @@ export async function synthesizeSpeech(params: {
 
   const response = await openai.audio.speech.create({
     model: TTS_MODEL,
-    voice: (params.voice as "alloy") || "alloy",
+    voice: (params.voice as "alloy" | "nova" | "onyx") || "alloy",
     input,
     response_format: "mp3",
     speed: 1.05,

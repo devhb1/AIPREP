@@ -12,6 +12,7 @@ export async function chatCompletion(params: {
   feature?: string;
   temperature?: number;
   useCache?: boolean;
+  maxTokens?: number;
 }) {
   const model = params.model ?? MODELS.fast;
   const cachePayload = `${model}|${params.system}|${params.user}`;
@@ -36,6 +37,7 @@ export async function chatCompletion(params: {
   const response = await openai.chat.completions.create({
     model,
     temperature: params.temperature ?? 0.2,
+    ...(params.maxTokens ? { max_tokens: params.maxTokens } : {}),
     messages: [
       { role: "system", content: params.system },
       { role: "user", content: params.user },

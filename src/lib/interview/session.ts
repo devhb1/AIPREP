@@ -13,13 +13,21 @@ import {
 } from "@/lib/db/schema";
 import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
-import { retrieveRelevantChunks } from "@/lib/rag/retrieve";
 import {
   interviewChecklistSystem,
   interviewEvalSystem,
   interviewFollowupSystem,
-  textInterviewSystem,
+  type InterviewLanguage,
 } from "@prompts";
+import {
+  PERSONAS,
+  maxCandidateTurns,
+  panelCloser,
+  panelOpener,
+  personaAfterCandidateTurns,
+  type PersonaKey,
+} from "@/lib/interview/personas";
+import { invalidateNba } from "@/lib/cache/ai-cache";
 
 export type JudgeMode = "easy" | "normal" | "strict";
 
@@ -62,6 +70,16 @@ const reportSchema = z.object({
     }),
   ),
   drills: z.array(z.string()),
+  focusRecommendations: z
+    .array(
+      z.object({
+        topic: z.string(),
+        reason: z.string(),
+        suggestedAction: z.string(),
+        urgencyDays: z.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export async function ensureInterviewChecklist(params: {
@@ -149,6 +167,7 @@ export async function startInterviewSession(params: {
   judgeMode?: JudgeMode;
   targetMinutes?: number;
   mode?: "text" | "voice";
+  language?: InterviewLanguage;
 }) {
   const [workspace] = await db
     .select()
@@ -158,6 +177,10 @@ export async function startInterviewSession(params: {
   if (!workspace) throw new Error("Workspace not found");
 
   const judgeMode = params.judgeMode ?? "normal";
+  const language = params.language ?? "en";
+  const targetMinutes = params.targetMinutes ?? 10;
+  const openingQuestion = panelOpener(language);
+
   const [session] = await db
     .insert(interviewSessions)
     .values({
@@ -166,39 +189,32 @@ export async function startInterviewSession(params: {
       mode: params.mode ?? "text",
       judgeMode,
       status: "active",
-      targetMinutes: params.targetMinutes ?? 20,
+      targetMinutes,
+      speechMetrics: {
+        language,
+        persona: "hr" as PersonaKey,
+        engine: params.mode === "voice" ? "turn_based" : "text",
+        judgeMode,
+        candidateTurns: 0,
+        maxCandidateTurns: maxCandidateTurns(targetMinutes),
+      },
     })
     .returning();
-
-  const contextChunks = await retrieveRelevantChunks({
-    workspaceId: params.workspaceId,
-    query: "KVS PRT interview introduction pedagogy documents",
-    userId: params.userId,
-    limit: 4,
-  });
-
-  const opener = await chatCompletion({
-    model: MODELS.fast,
-    system: `${textInterviewSystem(workspace.name, judgeMode)}
-${judgeInstructions(judgeMode)}`,
-    user: `Candidate role: ${workspace.role ?? "PRT"}
-Org: ${workspace.organization ?? "KVS"}
-Context excerpts (may be empty):
-${contextChunks.map((c) => c.content).join("\n").slice(0, 3000)}`,
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-    feature: "interview_start",
-    useCache: false,
-  });
 
   await db.insert(interviewTurns).values({
     sessionId: session.id,
     turnIndex: 0,
     role: "interviewer",
-    content: opener.content,
+    content: openingQuestion,
+    metadata: { persona: "hr", hardcoded: true },
   });
 
-  return { session, openingQuestion: opener.content };
+  return {
+    session,
+    openingQuestion,
+    persona: "hr" as PersonaKey,
+    personaLabel: PERSONAS.hr.label,
+  };
 }
 
 export async function answerInterviewTurn(params: {
@@ -235,56 +251,84 @@ export async function answerInterviewTurn(params: {
     content: params.answer,
   });
 
-  const transcript = [...turns, { role: "candidate", content: params.answer }]
-    .map((t) => `${t.role.toUpperCase()}: ${t.content}`)
-    .join("\n");
+  const metrics = (session.speechMetrics ?? {}) as Record<string, unknown>;
+  const language = (
+    metrics.language === "hi" || metrics.language === "mix" ? metrics.language : "en"
+  ) as InterviewLanguage;
+  const candidateTurns =
+    turns.filter((t) => t.role === "candidate").length + 1;
+  const cap =
+    typeof metrics.maxCandidateTurns === "number"
+      ? metrics.maxCandidateTurns
+      : maxCandidateTurns(session.targetMinutes);
+  const closeNow = candidateTurns >= cap;
 
-  const elapsedTurns = turns.filter((t) => t.role === "interviewer").length + 1;
-  const shouldSuggestEnd = elapsedTurns >= 6;
+  let persona: PersonaKey = closeNow ? "hr" : personaAfterCandidateTurns(candidateTurns);
+  let interviewerMessage = panelCloser(language);
+  let score: number | null = null;
+  let feedback: string | null = closeNow ? "Session wrapping up." : null;
+  let shouldEnd = closeNow;
 
-  const result = await chatCompletion({
-    model: MODELS.fast,
-    system: `${interviewFollowupSystem(session.judgeMode)}
+  if (!closeNow) {
+    const recent = [...turns, { role: "candidate", content: params.answer }].slice(-6);
+    const transcript = recent
+      .map((t) => `${t.role.toUpperCase()}: ${t.content}`)
+      .join("\n");
+
+    const result = await chatCompletion({
+      model: MODELS.fast,
+      system: `${interviewFollowupSystem(session.judgeMode, PERSONAS[persona].fragment)}
 ${judgeInstructions(session.judgeMode as JudgeMode)}`,
-    user: `Turn count (interviewer asks so far): ${elapsedTurns}
-Suggest end soon: ${shouldSuggestEnd}
-TRANSCRIPT:
-${transcript.slice(0, 12000)}`,
-    userId: params.userId,
-    workspaceId: params.workspaceId,
-    feature: "interview_turn",
-    useCache: false,
-    temperature: 0.3,
-  });
+      user: `Candidate answers so far: ${candidateTurns}/${cap}
+Recent turns only:
+${transcript.slice(0, 3500)}`,
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+      feature: "interview_turn",
+      useCache: false,
+      temperature: 0.3,
+      maxTokens: 140,
+    });
 
-  let parsed = turnSchema.safeParse({
-    interviewerMessage: result.content,
-    score: 6,
-    feedback: "Continue with a clearer example.",
-  });
-  try {
-    const match = result.content.match(/\{[\s\S]*\}/);
-    const json = JSON.parse(match ? match[0] : "{}");
-    const safe = turnSchema.safeParse(json);
-    if (safe.success) parsed = safe;
-  } catch {
-    // fallback already set
+    let parsed = turnSchema.safeParse({
+      interviewerMessage: result.content,
+      score: 6,
+      feedback: "Give a classroom example.",
+    });
+    try {
+      const match = result.content.match(/\{[\s\S]*\}/);
+      const json = JSON.parse(match ? match[0] : "{}");
+      const safe = turnSchema.safeParse(json);
+      if (safe.success) parsed = safe;
+    } catch {
+      // fallback already set
+    }
+
+    const data = parsed.success
+      ? parsed.data
+      : {
+          interviewerMessage:
+            "Thank you. Can you give a classroom example to support that?",
+          score: 6,
+          feedback: "Add a concrete teaching example.",
+          shouldEnd: false,
+        };
+
+    interviewerMessage = data.interviewerMessage.slice(0, 320);
+    score = data.score ?? null;
+    feedback = data.feedback ?? null;
+    shouldEnd = Boolean(data.shouldEnd) || candidateTurns >= cap - 1;
+    if (shouldEnd) {
+      interviewerMessage = panelCloser(language);
+      persona = "hr";
+    }
   }
-
-  const data = parsed.success
-    ? parsed.data
-    : {
-        interviewerMessage: "Thank you. Can you give a classroom example to support that?",
-        score: 6,
-        feedback: "Add a concrete teaching example.",
-        shouldEnd: false,
-      };
 
   await db
     .update(interviewTurns)
     .set({
-      score: data.score ?? null,
-      feedback: data.feedback ?? null,
+      score,
+      feedback,
     })
     .where(
       and(
@@ -299,16 +343,30 @@ ${transcript.slice(0, 12000)}`,
       sessionId: session.id,
       turnIndex: nextIndex + 1,
       role: "interviewer",
-      content: data.interviewerMessage,
-      metadata: { isFollowUp: data.isFollowUp ?? false },
+      content: interviewerMessage,
+      metadata: { persona, hardcoded: closeNow || shouldEnd },
     })
     .returning();
 
+  await db
+    .update(interviewSessions)
+    .set({
+      speechMetrics: {
+        ...metrics,
+        language,
+        persona,
+        candidateTurns,
+      },
+    })
+    .where(eq(interviewSessions.id, session.id));
+
   return {
     interviewerTurn,
-    score: data.score ?? null,
-    feedback: data.feedback ?? null,
-    shouldEnd: Boolean(data.shouldEnd) || shouldSuggestEnd,
+    score,
+    feedback,
+    shouldEnd,
+    persona,
+    personaLabel: PERSONAS[persona].label,
   };
 }
 
@@ -364,11 +422,30 @@ export async function endInterviewSession(params: {
     weaknesses: ["Needs more concrete classroom examples"],
     improvedAnswers: [] as Array<{ prompt: string; original: string; improved: string }>,
     drills: ["Practice a 2-minute demo explanation on one PRT topic"],
+    focusRecommendations: [
+      {
+        topic: "Classroom examples",
+        reason: "Answers stayed general.",
+        suggestedAction: "Prepare two STAR stories from a real classroom.",
+        urgencyDays: 3,
+      },
+    ],
   };
 
   try {
     const match = result.content.match(/\{[\s\S]*\}/);
-    const safe = reportSchema.safeParse(JSON.parse(match ? match[0] : "{}"));
+    const raw = JSON.parse(match ? match[0] : "{}") as Record<string, unknown>;
+    if (!raw.focusRecommendations && Array.isArray(raw.focus_recommendations)) {
+      raw.focusRecommendations = (raw.focus_recommendations as Array<Record<string, unknown>>).map(
+        (row) => ({
+          topic: row.topic,
+          reason: row.reason,
+          suggestedAction: row.suggestedAction ?? row.suggested_action,
+          urgencyDays: row.urgencyDays ?? row.urgency_days,
+        }),
+      );
+    }
+    const safe = reportSchema.safeParse(raw);
     if (safe.success) report = safe.data;
   } catch {
     // fallback
@@ -398,6 +475,20 @@ export async function endInterviewSession(params: {
     });
   }
 
+  for (const rec of (report.focusRecommendations ?? []).slice(0, 3)) {
+    await db.insert(tasks).values({
+      workspaceId: params.workspaceId,
+      title: rec.suggestedAction.slice(0, 80),
+      description: `${rec.topic}: ${rec.reason}`,
+      taskType: "interview_drill",
+      status: "pending",
+      priority: "high",
+      estimatedMinutes: 20,
+      dueDate: new Date(),
+      metadata: { source: "focus_recommendation", urgencyDays: rec.urgencyDays },
+    });
+  }
+
   for (const drill of report.drills.slice(0, 4)) {
     await db.insert(tasks).values({
       workspaceId: params.workspaceId,
@@ -410,6 +501,8 @@ export async function endInterviewSession(params: {
       dueDate: new Date(),
     });
   }
+
+  await invalidateNba(params.workspaceId);
 
   return { session: updated, report, turns };
 }

@@ -97,6 +97,7 @@ const bodySchema = z.object({
   answer: z.string().min(1).max(8000).optional(),
   judgeMode: z.enum(["easy", "normal", "strict"]).optional(),
   targetMinutes: z.number().int().min(5).max(45).optional(),
+  language: z.enum(["en", "hi", "mix"]).optional(),
   itemId: z.string().optional(),
   title: z.string().optional(),
   content: z.string().optional(),
@@ -183,6 +184,7 @@ export async function POST(request: Request) {
         userId: user.id,
         judgeMode: (parsed.data.judgeMode as JudgeMode) ?? "normal",
         targetMinutes: parsed.data.targetMinutes,
+        language: parsed.data.language,
       });
       return NextResponse.json(result);
     } catch (error) {

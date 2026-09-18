@@ -4,6 +4,7 @@ import { ensureProfile, requireUser } from "@/lib/auth/session";
 import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 import { rateLimit } from "@/lib/rate-limit";
 import {
+  answerTurnTextInterview,
   answerTurnVoiceInterview,
   assertOwnedWorkspace,
   finishTurnVoiceInterview,
@@ -23,6 +24,13 @@ const startSchema = z.object({
   language: z.enum(["en", "hi", "mix"]).optional(),
   recordingConsent: z.boolean().optional(),
   targetMinutes: z.number().int().min(5).max(20).optional(),
+});
+
+const textAnswerSchema = z.object({
+  workspaceId: z.string().uuid(),
+  action: z.literal("text_answer"),
+  sessionId: z.string().uuid(),
+  answer: z.string().min(1).max(4000),
 });
 
 const endSchema = z.object({
@@ -136,6 +144,40 @@ export async function POST(request: Request) {
         recordingConsent: true,
       });
       return NextResponse.json(result);
+    }
+
+    const textParsed = textAnswerSchema.safeParse(body);
+    if (textParsed.success) {
+      const workspace = await assertOwnedWorkspace(
+        user.id,
+        textParsed.data.workspaceId,
+      );
+      if (!workspace) return jsonError("Not found", 404);
+      try {
+        await assertWithinDailyBudget({
+          workspaceId: textParsed.data.workspaceId,
+          userId: user.id,
+        });
+      } catch (error) {
+        return jsonError(
+          error instanceof Error ? error.message : "Budget exceeded",
+          429,
+        );
+      }
+      try {
+        const result = await answerTurnTextInterview({
+          sessionId: textParsed.data.sessionId,
+          workspaceId: textParsed.data.workspaceId,
+          userId: user.id,
+          answer: textParsed.data.answer,
+        });
+        return NextResponse.json(result);
+      } catch (error) {
+        return jsonError(
+          error instanceof Error ? error.message : "Turn failed",
+          400,
+        );
+      }
     }
 
     const endParsed = endSchema.safeParse(body);

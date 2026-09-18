@@ -252,12 +252,11 @@ export default function InterviewPage() {
       <section className="space-y-5 rounded-2xl border border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel p-5 sm:p-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
-            Primary · saves credits
+            Primary
           </p>
-          <h3 className="mt-2 text-2xl text-ink">Start voice drill</h3>
+          <h3 className="mt-2 text-2xl text-ink">Start mock panel interview</h3>
           <p className="mt-1 text-sm text-muted">
-            Hold-to-talk turns: cheap STT + text panel + short TTS. Best for daily
-            practice without burning Realtime credits.
+            HR opens, pedagogy probes, general awareness, HR closes. Speak or type.
           </p>
         </div>
 
@@ -297,11 +296,11 @@ export default function InterviewPage() {
                 mode: judgeMode,
                 consent: "1",
               });
-              router.push(`/workspace/${workspaceId}/interview/drill?${q.toString()}`);
+              router.push(`/workspace/${workspaceId}/interview/mock?${q.toString()}`);
             }}
             className="min-h-12 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
-            Open voice drill →
+            Start mock panel →
           </button>
           <button
             type="button"

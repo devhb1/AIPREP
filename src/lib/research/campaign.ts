@@ -176,6 +176,7 @@ export async function runResearchCampaign(campaignId: string) {
           ? chunks.filter(
               (c) =>
                 c.kind === "memory" ||
+                c.kind === "kb" ||
                 (c.documentId && documentIds.includes(c.documentId)),
             )
           : chunks;

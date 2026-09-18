@@ -432,6 +432,44 @@ export const memoryEmbeddings = pgTable(
   (table) => [index("memory_embeddings_workspace_idx").on(table.workspaceId)],
 );
 
+export const kbBaseItems = pgTable(
+  "kb_base_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    examKey: text("exam_key").notNull().default("kvs_prt_2026"),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    sourceUrl: text("source_url"),
+    sourceTitle: text("source_title"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    adminVerified: boolean("admin_verified").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("kb_base_items_exam_category_title_uidx").on(
+      table.examKey,
+      table.category,
+      table.title,
+    ),
+    index("kb_base_items_exam_idx").on(table.examKey),
+  ],
+);
+
+export const kbBaseEmbeddings = pgTable(
+  "kb_base_embeddings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    kbItemId: uuid("kb_item_id")
+      .notNull()
+      .references(() => kbBaseItems.id, { onDelete: "cascade" }),
+    embedding: vector("embedding"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("kb_base_embeddings_item_idx").on(table.kbItemId)],
+);
+
 export type Workspace = typeof workspaces.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type Job = typeof jobs.$inferSelect;

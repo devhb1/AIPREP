@@ -128,14 +128,16 @@ export async function POST(request: Request) {
 
         const contextBlock =
           chunks.length === 0
-            ? "No trusted memory or indexed document excerpts were retrieved. Say that evidence is missing and ask the user to upload PDFs and/or approve research claims."
+            ? "No trusted memory, indexed documents, or AIPREP Knowledge Base excerpts were retrieved. Say that evidence is missing and ask the user to upload PDFs and/or approve research claims."
             : chunks
                 .map((c, i) => {
-                  const label =
-                    c.kind === "memory"
-                      ? `Trusted memory`
-                      : `${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}`;
-                  return `[#${i + 1}] (${c.kind}) ${label}\n${c.content}`;
+                  const origin =
+                    c.kind === "kb"
+                      ? "AIPREP Knowledge Base (admin-verified, not user-approved)"
+                      : c.kind === "memory"
+                        ? "Your Verified Notes"
+                        : `Your Documents · ${c.title}${c.pageNumber ? ` p.${c.pageNumber}` : ""}`;
+                  return `[#${i + 1}] (${c.kind}) ${origin}\n${c.content}`;
                 })
                 .join("\n\n");
 
@@ -154,8 +156,15 @@ ${contextBlock}`;
         const citations = chunks.map((c, i) => ({
           index: i + 1,
           kind: c.kind,
+          sourceLabel:
+            c.kind === "kb"
+              ? "AIPREP Knowledge Base"
+              : c.kind === "memory"
+                ? "Your Verified Notes"
+                : "Your Documents",
           documentId: c.documentId,
           memoryId: c.memoryId ?? null,
+          kbItemId: c.kbItemId ?? null,
           title: c.title,
           pageNumber: c.pageNumber,
           excerpt: c.content.slice(0, 280),

@@ -1,22 +1,32 @@
 import { sql } from "@/lib/db";
 import { embedQuery } from "@/lib/ai/embeddings";
 
+export const DEFAULT_EXAM_KEY = "kvs_prt_2026";
+
 export type RetrievedChunk = {
   id: string;
   documentId: string | null;
   memoryId?: string | null;
+  kbItemId?: string | null;
   title: string;
   pageNumber: number | null;
   content: string;
   distance: number;
-  kind: "document" | "memory";
+  kind: "document" | "memory" | "kb";
 };
+
+export function citationSourceLabel(kind: RetrievedChunk["kind"]) {
+  if (kind === "kb") return "AIPREP Knowledge Base";
+  if (kind === "memory") return "Your Verified Notes";
+  return "Your Documents";
+}
 
 export async function retrieveRelevantChunks(params: {
   workspaceId: string;
   query: string;
   userId?: string | null;
   limit?: number;
+  examKey?: string;
 }): Promise<RetrievedChunk[]> {
   const embedding = await embedQuery({
     text: params.query,
@@ -28,11 +38,14 @@ export async function retrieveRelevantChunks(params: {
 
   const vectorLiteral = `[${embedding.join(",")}]`;
   const limit = params.limit ?? 6;
+  const examKey = params.examKey ?? DEFAULT_EXAM_KEY;
 
   const docRows = (await sql`
     SELECT
       c.id,
       c.document_id as "documentId",
+      NULL as "memoryId",
+      NULL as "kbItemId",
       d.title,
       c.page_number as "pageNumber",
       c.content,
@@ -52,6 +65,7 @@ export async function retrieveRelevantChunks(params: {
       e.id,
       NULL as "documentId",
       e.memory_id as "memoryId",
+      NULL as "kbItemId",
       COALESCE(m.title, 'Trusted memory') as title,
       NULL as "pageNumber",
       m.content,
@@ -67,7 +81,32 @@ export async function retrieveRelevantChunks(params: {
     LIMIT ${limit}
   `) as unknown as RetrievedChunk[];
 
-  return [...memoryRows, ...docRows]
+  let kbRows: RetrievedChunk[] = [];
+  try {
+    kbRows = (await sql`
+      SELECT
+        e.id,
+        NULL as "documentId",
+        NULL as "memoryId",
+        e.kb_item_id as "kbItemId",
+        k.title,
+        NULL as "pageNumber",
+        k.body as content,
+        (e.embedding <=> ${sql.unsafe(`'${vectorLiteral}'::vector`)}) as distance,
+        'kb' as kind
+      FROM kb_base_embeddings e
+      JOIN kb_base_items k ON k.id = e.kb_item_id
+      WHERE k.exam_key = ${examKey}
+        AND k.admin_verified = true
+        AND e.embedding IS NOT NULL
+      ORDER BY e.embedding <=> ${sql.unsafe(`'${vectorLiteral}'::vector`)}
+      LIMIT ${limit}
+    `) as unknown as RetrievedChunk[];
+  } catch {
+    kbRows = [];
+  }
+
+  return [...memoryRows, ...docRows, ...kbRows]
     .sort((a, b) => Number(a.distance) - Number(b.distance))
     .slice(0, limit);
 }

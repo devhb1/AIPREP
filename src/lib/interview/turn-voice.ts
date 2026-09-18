@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { interviewSessions, workspaces } from "@/lib/db/schema";
+import {
+  ttsVoiceForPersona,
+} from "@/lib/interview/personas";
 import { synthesizeSpeech, transcribeAudio } from "@/lib/ai/speech";
 import {
   answerInterviewTurn,
@@ -25,14 +28,17 @@ export async function startTurnVoiceInterview(params: {
     judgeMode: params.judgeMode,
     targetMinutes: params.targetMinutes ?? 10,
     mode: "voice",
+    language,
   });
 
   if (params.recordingConsent != null) {
+    const metrics = (started.session.speechMetrics ?? {}) as Record<string, unknown>;
     await db
       .update(interviewSessions)
       .set({
         recordingConsent: Boolean(params.recordingConsent),
         speechMetrics: {
+          ...metrics,
           language,
           engine: "turn_based",
           judgeMode: params.judgeMode ?? "normal",
@@ -43,6 +49,7 @@ export async function startTurnVoiceInterview(params: {
 
   const speech = await synthesizeSpeech({
     text: started.openingQuestion,
+    voice: ttsVoiceForPersona("hr"),
     userId: params.userId,
     workspaceId: params.workspaceId,
   });
@@ -54,6 +61,8 @@ export async function startTurnVoiceInterview(params: {
     audioMimeType: speech.mimeType,
     language,
     engine: "turn_based" as const,
+    persona: started.persona,
+    personaLabel: started.personaLabel,
   };
 }
 
@@ -102,6 +111,7 @@ export async function answerTurnVoiceInterview(params: {
 
   const speech = await synthesizeSpeech({
     text: turn.interviewerTurn.content,
+    voice: ttsVoiceForPersona(turn.persona),
     userId: params.userId,
     workspaceId: params.workspaceId,
   });
@@ -113,6 +123,42 @@ export async function answerTurnVoiceInterview(params: {
     score: turn.score,
     feedback: turn.feedback,
     shouldEnd: turn.shouldEnd,
+    persona: turn.persona,
+    personaLabel: turn.personaLabel,
+    audioBase64: speech.audioBase64,
+    audioMimeType: speech.mimeType,
+  };
+}
+
+export async function answerTurnTextInterview(params: {
+  sessionId: string;
+  workspaceId: string;
+  userId: string;
+  answer: string;
+}) {
+  const turn = await answerInterviewTurn({
+    sessionId: params.sessionId,
+    workspaceId: params.workspaceId,
+    userId: params.userId,
+    answer: params.answer,
+  });
+
+  const speech = await synthesizeSpeech({
+    text: turn.interviewerTurn.content,
+    voice: ttsVoiceForPersona(turn.persona),
+    userId: params.userId,
+    workspaceId: params.workspaceId,
+  });
+
+  return {
+    transcript: params.answer,
+    interviewerMessage: turn.interviewerTurn.content,
+    interviewerTurn: turn.interviewerTurn,
+    score: turn.score,
+    feedback: turn.feedback,
+    shouldEnd: turn.shouldEnd,
+    persona: turn.persona,
+    personaLabel: turn.personaLabel,
     audioBase64: speech.audioBase64,
     audioMimeType: speech.mimeType,
   };

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   claims,
   documents,
+  interviewSessions,
   mistakeEvents,
   studyPlans,
   tasks,
@@ -187,7 +188,7 @@ async function computeNextBestActionFresh(params: {
   workspaceId: string;
   userId: string;
 }): Promise<NextBestAction> {
-  const [pendingClaims, docStats, openMistakes, dueTasks] = await Promise.all([
+  const [pendingClaims, docStats, openMistakes, dueTasks, lastMock] = await Promise.all([
     db
       .select({ id: claims.id })
       .from(claims)
@@ -223,6 +224,21 @@ async function computeNextBestActionFresh(params: {
       )
       .orderBy(asc(tasks.dueDate))
       .limit(20),
+    db
+      .select({
+        report: interviewSessions.report,
+        overallScore: interviewSessions.overallScore,
+        endedAt: interviewSessions.endedAt,
+      })
+      .from(interviewSessions)
+      .where(
+        and(
+          eq(interviewSessions.workspaceId, params.workspaceId),
+          eq(interviewSessions.status, "completed"),
+        ),
+      )
+      .orderBy(desc(interviewSessions.endedAt))
+      .limit(1),
   ]);
 
   const readyDocs = Number(docStats[0]?.ready ?? 0);
@@ -255,6 +271,30 @@ async function computeNextBestActionFresh(params: {
       priority: "MEDIUM" as const,
       minutes: 5,
       href: "memory?tab=documents",
+    };
+  }
+
+  const recs = (lastMock[0]?.report as { focusRecommendations?: Array<{
+    topic?: string;
+    reason?: string;
+    suggestedAction?: string;
+  }> } | null)?.focusRecommendations;
+  const rec = recs?.[0];
+  const endedAt = lastMock[0]?.endedAt;
+  const mockIsFresh =
+    endedAt != null &&
+    Date.now() - new Date(endedAt).getTime() < 1000 * 60 * 60 * 48;
+  const mockNeedsWork =
+    lastMock[0]?.overallScore == null || Number(lastMock[0].overallScore) < 8;
+  if (rec?.suggestedAction && mockIsFresh && mockNeedsWork) {
+    return {
+      title: rec.suggestedAction.slice(0, 80),
+      why: rec.reason
+        ? `${rec.topic ?? "Last mock"}: ${rec.reason}`
+        : "From your last mock panel — highest-leverage fix.",
+      priority: "HIGH" as const,
+      minutes: 20,
+      href: "learn",
     };
   }
 
@@ -328,6 +368,10 @@ export type PlanIntake = {
   weakAreas: string[];
   strongAreas: string[];
   goals: string;
+  candidateName?: string;
+  currentStage?: string;
+  constraintsNote?: string;
+  daysPerWeek?: number;
 };
 
 export async function applyPlanIntake(params: {

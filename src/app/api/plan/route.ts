@@ -10,9 +10,16 @@ import {
   createAdaptivePlan,
   listPlanBundle,
 } from "@/lib/planning/planner";
+import {
+  draftToPlanIntake,
+  extractOnboardingText,
+  savePartialIntake,
+  type IntakeDraft,
+} from "@/lib/planning/onboarding";
 import { listSyllabus, generateSyllabus } from "@/lib/planning/syllabus";
 import { rateLimit } from "@/lib/rate-limit";
 import { invalidateNba } from "@/lib/cache/ai-cache";
+import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 
 async function assertWorkspace(userId: string, workspaceId: string) {
   const [workspace] = await db
@@ -61,10 +68,20 @@ export async function GET(request: Request) {
 const bodySchema = z.object({
   workspaceId: z.string().uuid(),
   action: z
-    .enum(["generate", "complete_task", "syllabus", "intake"])
+    .enum([
+      "generate",
+      "complete_task",
+      "syllabus",
+      "intake",
+      "intake_partial",
+      "onboarding_extract",
+      "onboarding_finish",
+    ])
     .default("generate"),
   taskId: z.string().uuid().optional(),
   days: z.number().int().min(7).max(30).optional(),
+  extractStep: z.enum(["intro", "date", "constraints"]).optional(),
+  text: z.string().max(1200).optional(),
   intake: z
     .object({
       daysUntilInterview: z.number().int().min(1).max(120),
@@ -72,6 +89,24 @@ const bodySchema = z.object({
       weakAreas: z.array(z.string()).max(8),
       strongAreas: z.array(z.string()).max(8),
       goals: z.string().min(3).max(500),
+      candidateName: z.string().max(80).optional(),
+      currentStage: z.string().max(120).optional(),
+      constraintsNote: z.string().max(400).optional(),
+      daysPerWeek: z.number().int().min(1).max(7).optional(),
+    })
+    .optional(),
+  patch: z
+    .object({
+      daysUntilInterview: z.number().int().min(1).max(120).optional(),
+      hoursPerDay: z.number().min(0.5).max(8).optional(),
+      weakAreas: z.array(z.string()).max(8).optional(),
+      strongAreas: z.array(z.string()).max(8).optional(),
+      goals: z.string().max(500).optional(),
+      candidateName: z.string().max(80).optional(),
+      currentStage: z.string().max(120).optional(),
+      constraintsNote: z.string().max(400).optional(),
+      daysPerWeek: z.number().int().min(1).max(7).optional(),
+      onboardingStep: z.number().int().min(0).max(8).optional(),
     })
     .optional(),
 });
@@ -83,7 +118,7 @@ export async function POST(request: Request) {
 
   const limited = await rateLimit({
     key: `plan:${user.id}`,
-    limit: 20,
+    limit: 40,
     windowSeconds: 60 * 60,
   });
   if (!limited.allowed) {
@@ -107,6 +142,57 @@ export async function POST(request: Request) {
       userId: user.id,
       intake: parsed.data.intake,
     });
+    await invalidateNba(parsed.data.workspaceId);
+    return NextResponse.json(result);
+  }
+
+  if (parsed.data.action === "intake_partial") {
+    const intake = await savePartialIntake({
+      workspaceId: parsed.data.workspaceId,
+      patch: parsed.data.patch ?? {},
+    });
+    return NextResponse.json({ intake });
+  }
+
+  if (parsed.data.action === "onboarding_extract") {
+    if (!parsed.data.text || !parsed.data.extractStep) {
+      return NextResponse.json({ error: "text and extractStep required" }, { status: 400 });
+    }
+    await assertWithinDailyBudget({
+      workspaceId: parsed.data.workspaceId,
+      userId: user.id,
+    });
+    const extracted = await extractOnboardingText({
+      userId: user.id,
+      workspaceId: parsed.data.workspaceId,
+      step: parsed.data.extractStep,
+      text: parsed.data.text,
+    });
+    return NextResponse.json(extracted);
+  }
+
+  if (parsed.data.action === "onboarding_finish") {
+    const [settings] = await db
+      .select()
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.workspaceId, parsed.data.workspaceId))
+      .limit(1);
+    const draft = {
+      ...(((settings?.settings as { intake?: Record<string, unknown> } | null)
+        ?.intake ?? {}) as Record<string, unknown>),
+      ...(parsed.data.patch ?? {}),
+    };
+    const intake = draftToPlanIntake(draft as IntakeDraft);
+    await savePartialIntake({
+      workspaceId: parsed.data.workspaceId,
+      patch: { ...intake, onboardingStep: 8 },
+    });
+    const result = await applyPlanIntake({
+      workspaceId: parsed.data.workspaceId,
+      userId: user.id,
+      intake,
+    });
+    await invalidateNba(parsed.data.workspaceId);
     return NextResponse.json(result);
   }
 

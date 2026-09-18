@@ -5,6 +5,7 @@ import { formatDate, formatDaysRemaining } from "@/lib/utils";
 import { getWorkspaceBootstrap } from "@/lib/workspaces/bootstrap";
 import { InstallHomeScreenBanner } from "@/components/install-banner";
 import { TodayMission } from "@/components/today-mission";
+import { OnboardingChat } from "@/components/onboarding-chat";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -22,11 +23,18 @@ export default async function WorkspacePage({ params }: Props) {
   const data = await getWorkspaceBootstrap({ workspaceId: id, userId: user.id });
   if (!data) notFound();
 
-  const { workspace, nextBestAction, stats } = data;
+  const { workspace, nextBestAction, stats, settings } = data;
+  const intake = (
+    settings?.settings as {
+      intake?: { completedAt?: string; daysUntilInterview?: number; onboardingStep?: number };
+    } | null
+  )?.intake;
+  const needsOnboarding = !intake?.completedAt && !intake?.daysUntilInterview;
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 pb-24">
       <InstallHomeScreenBanner />
+      {needsOnboarding ? <OnboardingChat workspaceId={id} /> : null}
       <div>
         <p className="text-sm text-muted">
           {formatDaysRemaining(stats.daysRemaining)} until interview

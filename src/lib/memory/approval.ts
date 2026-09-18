@@ -1,10 +1,10 @@
 import { createHash } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { db, sql } from "@/lib/db";
 import {
   claims,
-  memoryEmbeddings,
   memoryItems,
+  memoryLinks,
   memoryVersions,
 } from "@/lib/db/schema";
 import { embedTexts } from "@/lib/ai/embeddings";
@@ -70,6 +70,12 @@ export async function approveClaim(params: {
     status,
   });
 
+  await writeMemoryLinks({
+    workspaceId: params.workspaceId,
+    memoryId: memory.id,
+    topic: claim.topic,
+  });
+
   if (namespace === "trusted") {
     const [embedding] = await embedTexts({
       texts: [memory.content],
@@ -93,6 +99,47 @@ export async function approveClaim(params: {
   }
 
   return memory;
+}
+
+async function writeMemoryLinks(params: {
+  workspaceId: string;
+  memoryId: string;
+  topic: string | null;
+}) {
+  const topic = params.topic?.trim();
+  if (!topic) return;
+
+  await db.insert(memoryLinks).values({
+    workspaceId: params.workspaceId,
+    fromMemoryId: params.memoryId,
+    linkType: "topic",
+    topic,
+  });
+
+  const siblings = await db
+    .select({ id: memoryItems.id })
+    .from(memoryItems)
+    .where(
+      and(
+        eq(memoryItems.workspaceId, params.workspaceId),
+        eq(memoryItems.topicId, topic),
+        isNull(memoryItems.deletedAt),
+        ne(memoryItems.id, params.memoryId),
+      ),
+    )
+    .limit(5);
+
+  if (siblings.length === 0) return;
+
+  await db.insert(memoryLinks).values(
+    siblings.map((row) => ({
+      workspaceId: params.workspaceId,
+      fromMemoryId: params.memoryId,
+      toMemoryId: row.id,
+      linkType: "related",
+      topic,
+    })),
+  );
 }
 
 export async function rejectClaim(params: {

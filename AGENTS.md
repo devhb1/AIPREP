@@ -8,10 +8,12 @@ Structured AI call sites (not autonomous multi-agent swarm). All go through `src
 |---|---|---|
 | Mentor chat | `POST /api/chat` | `mentorSystem` |
 | Research campaign | `src/lib/research/campaign.ts` | OpenAI `web_search` + `claimExtractionSystem` |
+| Quick-search | `POST /api/memory/quick-search` | one `webResearch` + `claimExtractionSystem` |
 | Memory approval | `src/lib/memory/approval.ts` | deterministic promotion (no free-form invent) |
 | Syllabus | `src/lib/planning/syllabus.ts` | `syllabusSystem` |
 | Practice MCQ | `src/lib/planning/practice.ts` | `practiceMcqSystem` |
 | Planner / NBA | `src/lib/planning/planner.ts` | mostly deterministic + light AI |
+| Onboarding | `POST /api/plan` `onboarding_extract` / `onboarding_finish` | `onboardingExtractSystem` + chips |
 | Interview checklist | `src/lib/interview/session.ts` | `interviewChecklistSystem` |
 | Text mock | `src/lib/interview/session.ts` | `textInterviewSystem`, `interviewFollowupSystem`, `interviewEvalSystem` |
 | Voice mock | `src/lib/interview/voice.ts` | `voiceInterviewSystem` + Realtime ephemeral token |
@@ -20,7 +22,7 @@ Structured AI call sites (not autonomous multi-agent swarm). All go through `src
 
 - Zod-validate model JSON before DB writes
 - Feature string on every `logAiUsage` call
-- Budget gate (`assertWithinDailyBudget`) on chat/research/practice/interview/voice
+- Budget gate (`assertWithinDailyBudget`) on chat/research/practice/interview/voice/quick-search
 - Prompt templates live in `prompts/index.ts` (`PROMPT_VERSION`)
 
 ## Intentionally not agents

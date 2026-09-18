@@ -9,6 +9,8 @@ type Citation = {
   title: string;
   pageNumber: number | null;
   excerpt: string;
+  kind?: string;
+  sourceLabel?: string;
 };
 
 type ChatItem = {
@@ -199,7 +201,9 @@ export default function LearnMentorPage() {
                       key={c.index}
                       className="rounded-lg bg-[var(--background)] p-2 text-xs text-muted"
                     >
-                      [{c.index}] {c.title}
+                      [{c.index}] {c.sourceLabel ?? (c.kind === "kb" ? "AIPREP Knowledge Base" : c.kind === "memory" ? "Your Verified Notes" : "Your Documents")}
+                      {" · "}
+                      {c.title}
                       {c.pageNumber ? ` p.${c.pageNumber}` : ""} — {c.excerpt}
                     </div>
                   ))}

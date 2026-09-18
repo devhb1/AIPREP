@@ -15,6 +15,12 @@ export type ScorecardReport = {
   weaknesses?: string[];
   improvedAnswers?: Array<{ prompt: string; original: string; improved: string }>;
   drills?: string[];
+  focusRecommendations?: Array<{
+    topic: string;
+    reason: string;
+    suggestedAction: string;
+    urgencyDays?: number;
+  }>;
 };
 
 type Props = {
@@ -137,6 +143,22 @@ export function InterviewScorecard({
               <p className="mt-1 text-accent">Try: {item.improved}</p>
             </article>
           ))}
+        </div>
+      ) : null}
+
+      {(report.focusRecommendations ?? []).length > 0 ? (
+        <div>
+          <p className="text-sm font-semibold text-ink">What to focus on next</p>
+          <ul className="mt-2 space-y-2 text-sm">
+            {(report.focusRecommendations ?? []).map((rec) => (
+              <li key={rec.topic} className="rounded-xl border border-line bg-white px-3 py-2">
+                <p className="font-medium text-ink">{rec.suggestedAction}</p>
+                <p className="mt-0.5 text-muted">
+                  {rec.topic}: {rec.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

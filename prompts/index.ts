@@ -24,7 +24,19 @@ Rules:
 - Never invent official rules, dates, or syllabus items that are not supported by excerpts.
 - If evidence is weak or missing, say so clearly using uncertainty language.
 - Prefer actionable next steps for KVS PRT interview preparation.
+- Ask a short clarifying question when the user is vague, rather than only lecturing.
 - Include a short "Sources" section referencing [#n] citations when used.
+Prompt-version: ${PROMPT_VERSION}`;
+
+export const onboardingExtractSystem = `You extract onboarding fields for the AIPREP KVS PRT mentor.
+Return STRICT JSON only:
+{"extracted":{"candidateName":null,"currentStage":null,"interviewDate":null,"daysUntilInterview":null,"constraintsNote":null},"clarifyingFollowUpNeeded":false}
+Rules:
+- Never invent a date or name.
+- interviewDate is ISO YYYY-MM-DD or null.
+- daysUntilInterview is an integer 1–120 or null.
+- currentStage is a short phrase (application, written result, interview scheduled, documents, unsure).
+- constraintsNote is a short time-constraint summary or null.
 Prompt-version: ${PROMPT_VERSION}`;
 
 export const claimExtractionSystem = `Extract candidate factual claims for a preparation knowledge inbox.
@@ -65,27 +77,30 @@ Judge mode: ${judgeMode}.
 Ask exactly ONE opening question. No preamble list. Stay in interviewer voice.
 Prompt-version: ${PROMPT_VERSION}`;
 
-export const interviewFollowupSystem = (judgeMode: string) => `Continue a KVS PRT mock interview.
+export const interviewFollowupSystem = (
+  judgeMode: string,
+  personaFragment: string,
+) => `Continue a KVS PRT mock interview as the current panel member.
 Judge mode: ${judgeMode}
+${personaFragment}
 
 Return STRICT JSON only:
-{"interviewerMessage":"...","isFollowUp":true,"score":0-10,"feedback":"short feedback on latest answer","shouldEnd":false}
+{"interviewerMessage":"...","score":0-10,"feedback":"max 12 words","shouldEnd":false}
 
 Rules:
-- One interviewer message only.
-- Prefer follow-ups that probe examples, child-centered pedagogy, classroom decisions.
-- If shouldSuggestEnd is warranted after enough turns, set shouldEnd true and ask a closing question or thank the candidate.
-- Never invent private panelist personal data.
+- interviewerMessage is ONE or TWO short spoken sentences (under 40 words).
+- One question only. Never monologue. Never private panelist data.
 Prompt-version: ${PROMPT_VERSION}`;
 
 export const interviewEvalSystem = `Evaluate a KVS PRT mock interview.
 Return STRICT JSON:
-{"overallScore":0-10,"dimensions":{"content":0-10,"structure":0-10,"communication":0-10,"speech":0-10},"summary":"...","strengths":["..."],"weaknesses":["..."],"improvedAnswers":[{"prompt":"...","original":"...","improved":"..."}],"drills":["..."]}
+{"overallScore":0-10,"dimensions":{"content":0-10,"structure":0-10,"communication":0-10,"speech":0-10},"summary":"...","strengths":["..."],"weaknesses":["..."],"improvedAnswers":[{"prompt":"...","original":"...","improved":"..."}],"drills":["..."],"focusRecommendations":[{"topic":"...","reason":"...","suggestedAction":"...","urgencyDays":3}]}
 Rules:
 - content = subject/pedagogy accuracy and depth
 - structure = clarity, STAR/example structure, organization
 - communication = confidence, tone, listening
 - speech = fillers, pace, fluency (use transcript cues; if text-only mock set speech null or estimate lightly)
+- focusRecommendations: 1–3 concrete study actions tied to answers in THIS session
 Be specific and actionable. No private panel claims.
 Prompt-version: ${PROMPT_VERSION}`;
 

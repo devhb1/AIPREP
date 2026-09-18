@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import {
   documentChunks,
   documents,
+  kbBaseItems,
   memoryItems,
   subjects,
   topics,
   workspaces,
 } from "@/lib/db/schema";
+import { DEFAULT_EXAM_KEY } from "@/lib/rag/retrieve";
 import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
 import { syllabusSystem } from "@prompts";
@@ -29,6 +31,53 @@ const syllabusSchema = z.object({
     }),
   ),
 });
+
+const CATEGORY_SUBJECT: Record<string, { name: string; weight: number }> = {
+  official: { name: "Official rules & eligibility", weight: 1.1 },
+  logistics: { name: "Interview & Documents", weight: 0.95 },
+  interview: { name: "Interview process", weight: 1 },
+  historical: { name: "Historical / previous cycles", weight: 0.7 },
+  pyq: { name: "Common question themes", weight: 0.85 },
+};
+
+async function syllabusFromKb(): Promise<z.infer<typeof syllabusSchema> | null> {
+  try {
+    const items = await db
+      .select()
+      .from(kbBaseItems)
+      .where(eq(kbBaseItems.examKey, DEFAULT_EXAM_KEY))
+      .limit(40);
+    if (items.length === 0) return null;
+
+    const grouped = new Map<string, typeof items>();
+    for (const item of items) {
+      const list = grouped.get(item.category) ?? [];
+      list.push(item);
+      grouped.set(item.category, list);
+    }
+
+    const subjectsFromKb = [...grouped.entries()].map(([category, rows]) => {
+      const meta = CATEGORY_SUBJECT[category] ?? {
+        name: category,
+        weight: 0.8,
+      };
+      return {
+        name: meta.name,
+        description: `Grounded in AIPREP Knowledge Base (${category})`,
+        weight: meta.weight,
+        topics: rows.map((row) => ({
+          name: row.title,
+          description: row.body.slice(0, 220),
+          importance: 0.75,
+        })),
+      };
+    });
+
+    return subjectsFromKb.length ? { subjects: subjectsFromKb } : null;
+  } catch {
+    return null;
+  }
+}
 
 const KVS_FALLBACK: z.infer<typeof syllabusSchema> = {
   subjects: [
@@ -119,16 +168,36 @@ export async function generateSyllabus(params: {
     docSnippets += `\n# ${doc.title}\n${chunks.map((c) => c.content).join("\n")}`;
   }
 
+  let kbItems: Array<{ category: string; title: string; body: string }> = [];
+  try {
+    kbItems = await db
+      .select({
+        category: kbBaseItems.category,
+        title: kbBaseItems.title,
+        body: kbBaseItems.body,
+      })
+      .from(kbBaseItems)
+      .where(eq(kbBaseItems.examKey, DEFAULT_EXAM_KEY))
+      .limit(24);
+  } catch {
+    kbItems = [];
+  }
+  const kbSnippets = kbItems
+    .map((item) => `[AIPREP Knowledge Base / ${item.category}] ${item.title}: ${item.body}`)
+    .join("\n");
+
   const evidence = [
     trusted.map((m) => m.content).join("\n"),
     docSnippets,
+    kbSnippets,
   ]
     .filter(Boolean)
     .join("\n\n")
     .slice(0, 12000);
 
-  let parsed = KVS_FALLBACK;
-  if (evidence.trim()) {
+  const kbFallback = (await syllabusFromKb()) ?? KVS_FALLBACK;
+  let parsed = kbFallback;
+  if (trusted.length > 0 || docSnippets.trim()) {
     const result = await chatCompletion({
       model: MODELS.fast,
       system: syllabusSystem,
