@@ -65,7 +65,7 @@ export const workspaceSettings = pgTable("workspace_settings", {
   workspaceId: uuid("workspace_id")
     .primaryKey()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  maxDailyAiSpendUsd: real("max_daily_ai_spend_usd").default(1.5),
+  maxDailyAiSpendUsd: real("max_daily_ai_spend_usd").default(1),
   maxResearchQueries: integer("max_research_queries").default(20),
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

@@ -53,7 +53,7 @@ export default function SettingsPage() {
     const notif = await notifRes.json();
     setUsage(main.usage ?? null);
     setSettings(main.settings ?? null);
-    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 1.5));
+    setDailyCap(String(main.settings?.maxDailyAiSpendUsd ?? 1));
     setVoiceCap(
       String(
         main.usage?.maxDailyVoiceSpendUsd ??

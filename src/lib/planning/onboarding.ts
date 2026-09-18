@@ -6,6 +6,7 @@ import { chatCompletion } from "@/lib/ai/responses";
 import { MODELS } from "@/lib/ai/models";
 import { onboardingExtractSystem } from "@prompts";
 import type { PlanIntake } from "./planner";
+import { DEFAULT_DAILY_AI_USD } from "@/lib/budget";
 
 export type IntakeDraft = Partial<PlanIntake> & {
   candidateName?: string;
@@ -80,7 +81,7 @@ export async function savePartialIntake(params: {
   } else {
     await db.insert(workspaceSettings).values({
       workspaceId: params.workspaceId,
-      maxDailyAiSpendUsd: 1.5,
+      maxDailyAiSpendUsd: DEFAULT_DAILY_AI_USD,
       settings: nextSettings,
     });
   }

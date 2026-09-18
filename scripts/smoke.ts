@@ -60,6 +60,69 @@ async function pingRedis(checks: Check[]) {
   }
 }
 
+async function pingKbAndCaps(checks: Check[]) {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) {
+    checks.push({ name: "kb_base_items", ok: false, detail: "DATABASE_URL missing" });
+    return;
+  }
+  const postgres = (await import("postgres")).default;
+  const withSsl = url.includes("sslmode=")
+    ? url
+    : `${url}${url.includes("?") ? "&" : "?"}sslmode=require`;
+  const sql = postgres(withSsl, {
+    prepare: false,
+    max: 1,
+    ssl: "require",
+    connect_timeout: 15,
+  });
+  try {
+    const kb = await sql<{ n: number }[]>`
+      select count(*)::int as n from kb_base_items
+    `;
+    const n = Number(kb[0]?.n ?? 0);
+    checks.push({
+      name: "kb_base_items",
+      ok: n >= 1,
+      detail: n === 0 ? "empty — run npm run db:seed-kb" : `${n} facts`,
+    });
+
+    const caps = await sql<{ cap: number | null; voice: unknown }[]>`
+      select
+        max_daily_ai_spend_usd as cap,
+        settings -> 'maxDailyVoiceSpendUsd' as voice
+      from workspace_settings
+      limit 8
+    `;
+    const aiOk =
+      caps.length === 0 || caps.every((row) => Number(row.cap) <= 1.0001);
+    const voiceOk =
+      caps.length === 0 ||
+      caps.every((row) => {
+        const v = Number(row.voice ?? 0.4);
+        return v <= 0.4001;
+      });
+    checks.push({
+      name: "cap_ai_usd",
+      ok: aiOk,
+      detail: caps.map((r) => r.cap).join(",") || "no workspaces",
+    });
+    checks.push({
+      name: "cap_voice_usd",
+      ok: voiceOk,
+      detail: caps.map((r) => String(r.voice ?? "unset")).join(",") || "no workspaces",
+    });
+  } catch (error) {
+    checks.push({
+      name: "kb_and_caps",
+      ok: false,
+      detail: error instanceof Error ? error.message : "db error",
+    });
+  } finally {
+    await sql.end({ timeout: 2 });
+  }
+}
+
 async function main() {
   const checks: Check[] = [];
 
@@ -73,20 +136,23 @@ async function main() {
   req(checks, "NEXT_PUBLIC_APP_URL");
 
   const dbUrl = process.env.DATABASE_URL ?? "";
+  const poolerUrl = process.env.SESSION_POOLER_URL ?? process.env.TRANSACTION_POOLER_URL ?? "";
   const direct = /db\.[a-z0-9]+\.supabase\.co/i.test(dbUrl);
-  const pooler = /pooler\.supabase\.com/i.test(dbUrl);
+  const pooler =
+    /pooler\.supabase\.com/i.test(dbUrl) || /pooler\.supabase\.com/i.test(poolerUrl);
   checks.push({
     name: "database_url_shape",
     ok: pooler || !direct,
     detail: pooler
-      ? "session/transaction pooler host"
+      ? "session/transaction pooler host available"
       : direct
-        ? "direct db.*.supabase.co — prefer Session pooler (IPv4)"
+        ? "direct db.*.supabase.co — set SESSION_POOLER_URL for Vercel"
         : "custom host",
   });
 
   await pingRedis(checks);
   await pingHealth(checks);
+  await pingKbAndCaps(checks);
 
   let failed = 0;
   for (const c of checks) {

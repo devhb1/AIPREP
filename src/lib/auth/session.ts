@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { profiles, workspaceSettings, workspaces } from "@/lib/db/schema";
+import { DEFAULT_DAILY_AI_USD, DEFAULT_DAILY_VOICE_USD } from "@/lib/budget";
 import { createClient } from "@/lib/supabase/server";
 
 export async function requireUser() {
@@ -75,12 +76,12 @@ export async function ensureKvsSeedWorkspace(userId: string) {
 
   await db.insert(workspaceSettings).values({
     workspaceId: workspace.id,
-    maxDailyAiSpendUsd: 1.5,
+    maxDailyAiSpendUsd: DEFAULT_DAILY_AI_USD,
     maxResearchQueries: 20,
     settings: {
       seedLabel: "KVS PRT Interview 2026",
       focus: ["pedagogy", "child development", "subject knowledge", "interview documents"],
-      maxDailyVoiceSpendUsd: 0.5,
+      maxDailyVoiceSpendUsd: DEFAULT_DAILY_VOICE_USD,
     },
   });
 

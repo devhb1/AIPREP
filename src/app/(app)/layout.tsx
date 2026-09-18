@@ -15,7 +15,7 @@ export default async function AppShellLayout({
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[220px_1fr]">
-      <aside className="hidden border-r border-line bg-panel/90 px-5 py-6 lg:block">
+      <aside className="app-chrome hidden border-r border-line bg-panel/90 px-5 py-6 lg:block">
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
             AIPREP
@@ -39,7 +39,7 @@ export default async function AppShellLayout({
       </aside>
 
       <div className="safe-pad px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <header className="mb-4 flex items-center justify-between gap-3 lg:hidden">
+        <header className="app-chrome mb-4 flex items-center justify-between gap-3 lg:hidden">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-accent">
               AIPREP

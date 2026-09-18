@@ -7,6 +7,7 @@ import {
   InterviewScorecard,
   type ScorecardReport,
 } from "@/components/interview-scorecard";
+import { Button, Chip, Skeleton } from "@/components/ui";
 
 type Session = {
   id: string;
@@ -52,6 +53,7 @@ export default function InterviewPage() {
   const [stories, setStories] = useState<Story[]>([]);
   const [judgeMode, setJudgeMode] = useState<"easy" | "normal" | "strict">("normal");
   const [language, setLanguage] = useState<InterviewLanguage>("en");
+  const [minutes, setMinutes] = useState(10);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [answer, setAnswer] = useState("");
@@ -79,6 +81,10 @@ export default function InterviewPage() {
 
   useEffect(() => {
     void loadMeta();
+  }, [workspaceId]);
+
+  useEffect(() => {
+    void fetch(`/api/interview/warmup?workspaceId=${workspaceId}`);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -249,7 +255,7 @@ export default function InterviewPage() {
 
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
-      <section className="space-y-5 rounded-2xl border border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel p-5 sm:p-6">
+      <section className="surface-card space-y-5 border-accent/40 bg-gradient-to-br from-accent-soft/80 to-panel">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
             Primary
@@ -260,55 +266,70 @@ export default function InterviewPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Language</span>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as InterviewLanguage)}
-              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
-            >
-              <option value="en">English</option>
-              <option value="hi">Hindi</option>
-              <option value="mix">Mix (Hinglish)</option>
-            </select>
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-muted">Judge mode</span>
-            <select
-              value={judgeMode}
-              onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-              className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
-            >
-              <option value="easy">Easy</option>
-              <option value="normal">Normal</option>
-              <option value="strict">Strict</option>
-            </select>
-          </label>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Duration
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[5, 10, 15].map((m) => (
+              <Chip key={m} active={minutes === m} onClick={() => setMinutes(m)}>
+                {m} min
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Judge
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(["easy", "normal", "strict"] as const).map((m) => (
+              <Chip key={m} active={judgeMode === m} onClick={() => setJudgeMode(m)}>
+                {m}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Language
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["en", "EN"],
+                ["hi", "HI"],
+                ["mix", "Mix"],
+              ] as const
+            ).map(([value, label]) => (
+              <Chip
+                key={value}
+                active={language === value}
+                onClick={() => setLanguage(value)}
+              >
+                {label}
+              </Chip>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
             onClick={() => {
               const q = new URLSearchParams({
                 lang: language,
                 mode: judgeMode,
+                mins: String(minutes),
                 consent: "1",
               });
               router.push(`/workspace/${workspaceId}/interview/mock?${q.toString()}`);
             }}
-            className="min-h-12 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
             Start mock panel →
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowTextMock(true)}
-            className="min-h-12 rounded-xl border border-line bg-white px-5 py-3 text-sm font-semibold"
-          >
-            Text mock (cheapest)
-          </button>
+          </Button>
+          <Button variant="ghost" onClick={() => setShowTextMock(true)}>
+            Type instead
+          </Button>
         </div>
         <p className="text-xs text-muted">
           Type answers if the mic is unreliable.
@@ -422,7 +443,7 @@ export default function InterviewPage() {
         {metaLoading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-8 animate-pulse rounded-lg bg-[var(--background)]" />
+              <Skeleton key={i} className="h-8" />
             ))}
           </div>
         ) : (

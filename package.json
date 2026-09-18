@@ -9,7 +9,10 @@
     "lint": "eslint",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed-kb": "tsx scripts/seed-kb.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "interview-bench": "tsx scripts/interview-bench.ts",
+    "budget-soak": "tsx scripts/budget-soak.ts",
+    "qa:gate": "tsx scripts/qa-gate.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

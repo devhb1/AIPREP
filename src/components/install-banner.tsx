@@ -24,17 +24,18 @@ export function InstallHomeScreenBanner() {
   useEffect(() => {
     try {
       if (isStandalone()) return;
+      if (!isIos()) return;
       if (localStorage.getItem(STORAGE_KEY) === "1") return;
       setShow(true);
     } catch {
-      setShow(true);
+      setShow(isIos() && !isStandalone());
     }
   }, []);
 
   if (!show) return null;
 
   return (
-    <div className="mb-4 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink">
+    <div className="install-nudge mb-4 rounded-[var(--radius-card)] border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-semibold text-accent">Add AIPREP to your Home Screen</p>

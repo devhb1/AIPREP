@@ -7,6 +7,7 @@ import { uploadPdfToWorkspace } from "@/lib/documents/client-upload";
 import { InstallHomeScreenBanner } from "@/components/install-banner";
 import { PdfPickButton } from "@/components/pdf-pick-button";
 import { MemoryGraph, type GraphEdge, type GraphNode } from "@/components/memory-graph";
+import { Button, Chip, Sheet, Skeleton } from "@/components/ui";
 
 type Tab = "all" | "scraped" | "approved" | "notes" | "stories" | "documents";
 
@@ -82,7 +83,8 @@ export default function MemoryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
-  const [view, setView] = useState<"list" | "graph">("list");
+  const [view, setView] = useState<"list" | "graph">("graph");
+  const [sheet, setSheet] = useState<null | "menu" | "search" | "upload">(null);
   const [quickQuery, setQuickQuery] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
@@ -131,6 +133,12 @@ export default function MemoryPage() {
   }, [workspaceId, tab]);
 
   useEffect(() => {
+    const saved = window.localStorage.getItem("aiprep-memory-view");
+    if (saved === "list" || saved === "graph") setView(saved);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("aiprep-memory-view", view);
     if (view === "graph") void loadGraph();
   }, [workspaceId, view]);
 
@@ -194,6 +202,7 @@ export default function MemoryPage() {
         return;
       }
       setQuickResult(data);
+      setSheet(null);
       setTab("scraped");
       router.replace("?tab=scraped", { scroll: false });
       await load("scraped");
@@ -260,24 +269,12 @@ export default function MemoryPage() {
           Ask one question, approve the facts, then use a full campaign only when you need breadth.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={`min-h-11 rounded-xl px-4 text-sm font-semibold ${
-              view === "list" ? "bg-accent text-white" : "border border-line bg-panel"
-            }`}
-          >
+          <Chip active={view === "list"} onClick={() => setView("list")}>
             List
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("graph")}
-            className={`min-h-11 rounded-xl px-4 text-sm font-semibold ${
-              view === "graph" ? "bg-accent text-white" : "border border-line bg-panel"
-            }`}
-          >
+          </Chip>
+          <Chip active={view === "graph"} onClick={() => setView("graph")}>
             Graph
-          </button>
+          </Chip>
           <Link
             href={`/workspace/${workspaceId}/research`}
             className="inline-flex min-h-11 items-center text-sm font-semibold text-accent"
@@ -291,28 +288,7 @@ export default function MemoryPage() {
 
       {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
-      <section className="rounded-2xl border border-line bg-panel p-5">
-        <h3 className="text-lg text-ink">Ask & save a fact</h3>
-        <p className="mt-1 text-sm text-muted">
-          One web search. Approve, save unconfirmed, or reject — same inbox as a campaign.
-        </p>
-        <form onSubmit={runQuickSearch} className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            value={quickQuery}
-            onChange={(e) => setQuickQuery(e.target.value)}
-            placeholder="What’s the KVS PRT age relaxation for OBC candidates?"
-            className="min-h-11 flex-1 rounded-xl border border-line px-3 py-2 text-sm"
-            disabled={quickBusy}
-          />
-          <button
-            type="submit"
-            disabled={quickBusy || quickQuery.trim().length < 8}
-            className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {quickBusy ? "Searching…" : "Search"}
-          </button>
-        </form>
-        {quickResult ? (
+      {quickResult ? (
           <div className="mt-4 space-y-3">
             <div className="rounded-xl bg-white p-3 text-sm text-ink">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
@@ -371,11 +347,10 @@ export default function MemoryPage() {
             ))}
           </div>
         ) : null}
-      </section>
 
       {view === "graph" ? (
         graphLoading ? (
-          <div className="h-48 animate-pulse rounded-2xl border border-line bg-panel" />
+          <Skeleton className="h-48 border border-line" />
         ) : (
           <MemoryGraph nodes={graphNodes} edges={graphEdges} />
         )
@@ -758,6 +733,77 @@ export default function MemoryPage() {
       )}
         </>
       ) : null}
+
+      <button
+        type="button"
+        aria-label="Add to memory"
+        onClick={() => setSheet("menu")}
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl font-semibold text-white shadow-lg lg:bottom-8"
+      >
+        +
+      </button>
+
+      <Sheet
+        open={sheet === "menu"}
+        title="Add to memory"
+        onClose={() => setSheet(null)}
+      >
+        <div className="space-y-2">
+          <Button className="w-full" onClick={() => setSheet("search")}>
+            Ask & save a fact
+          </Button>
+          <Button
+            className="w-full"
+            variant="ghost"
+            onClick={() => {
+              setTab("documents");
+              setSheet("upload");
+            }}
+          >
+            Upload a document
+          </Button>
+        </div>
+      </Sheet>
+
+      <Sheet
+        open={sheet === "search"}
+        title="Ask & save a fact"
+        onClose={() => setSheet(null)}
+      >
+        <p className="mb-3 text-sm text-muted">
+          One web search. Approve, save unconfirmed, or reject — same inbox as a campaign.
+        </p>
+        <form onSubmit={runQuickSearch} className="flex flex-col gap-2">
+          <input
+            value={quickQuery}
+            onChange={(e) => setQuickQuery(e.target.value)}
+            placeholder="What’s the KVS PRT age relaxation for OBC candidates?"
+            className="min-h-11 rounded-[var(--radius-btn)] border border-line px-3 py-2 text-sm"
+            disabled={quickBusy}
+          />
+          <Button
+            type="submit"
+            disabled={quickBusy || quickQuery.trim().length < 8}
+            className="w-full"
+          >
+            {quickBusy ? "Searching…" : "Search"}
+          </Button>
+        </form>
+      </Sheet>
+
+      <Sheet
+        open={sheet === "upload"}
+        title="Upload a PDF"
+        onClose={() => setSheet(null)}
+      >
+        <form onSubmit={onUpload} className="space-y-3">
+          <PdfPickButton file={file} onFile={setFile} disabled={uploading} />
+          <Button type="submit" disabled={!file || uploading} className="w-full">
+            {uploading ? "Uploading…" : "Upload to Memory"}
+          </Button>
+          {uploadMsg ? <p className="text-sm text-[var(--ok)]">{uploadMsg}</p> : null}
+        </form>
+      </Sheet>
     </main>
   );
 }

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { notifications, workspaceSettings, workspaces } from "@/lib/db/schema";
 import { ensureProfile, requireUser } from "@/lib/auth/session";
 import { getUsageSummary } from "@/lib/analytics/usage";
+import { DEFAULT_DAILY_AI_USD } from "@/lib/budget";
 import { buildTasksIcs, exportWorkspaceBundle } from "@/lib/export/workspace";
 import { resetWorkspaceContent } from "@/lib/workspaces/reset";
 
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
     workspace,
     settings: settings ?? {
       workspaceId,
-      maxDailyAiSpendUsd: 1.5,
+      maxDailyAiSpendUsd: DEFAULT_DAILY_AI_USD,
       maxResearchQueries: 20,
       settings: {},
     },
@@ -166,7 +167,7 @@ export async function POST(request: Request) {
       .insert(workspaceSettings)
       .values({
         workspaceId: parsed.data.workspaceId,
-        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? 1.5,
+        maxDailyAiSpendUsd: parsed.data.maxDailyAiSpendUsd ?? DEFAULT_DAILY_AI_USD,
         maxResearchQueries: parsed.data.maxResearchQueries ?? 20,
         settings: nextExtra,
       })

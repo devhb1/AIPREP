@@ -14,6 +14,7 @@ import {
 import { generateSyllabus } from "./syllabus";
 import { daysUntil } from "@/lib/utils";
 import { cacheGet, cacheSet, nbaCacheKey } from "@/lib/cache/ai-cache";
+import { DEFAULT_DAILY_AI_USD } from "@/lib/budget";
 
 export async function createAdaptivePlan(params: {
   workspaceId: string;
@@ -416,7 +417,7 @@ export async function applyPlanIntake(params: {
   } else {
     await db.insert(workspaceSettings).values({
       workspaceId: params.workspaceId,
-      maxDailyAiSpendUsd: 1.5,
+      maxDailyAiSpendUsd: DEFAULT_DAILY_AI_USD,
       settings: nextSettings,
     });
   }

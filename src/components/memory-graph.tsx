@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EmptyState, Sheet } from "@/components/ui";
 
 export type GraphNode = {
   id: string;
@@ -67,10 +68,10 @@ export function MemoryGraph({
 
   if (nodes.length === 0) {
     return (
-      <p className="rounded-2xl border border-line bg-panel p-5 text-sm text-muted">
-        No connections yet. Approve inbox facts or add a note with a topic to
-        grow the graph.
-      </p>
+      <EmptyState
+        title="No connections yet"
+        body="Approve inbox facts or add a note with a topic to grow the graph."
+      />
     );
   }
 
@@ -150,17 +151,20 @@ export function MemoryGraph({
           })}
         </svg>
       </div>
-      {selected ? (
-        <div className="rounded-2xl border border-line bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-            {selected.kind}
-            {selected.status ? ` · ${selected.status}` : ""}
-          </p>
-          <p className="mt-2 text-sm text-ink">{selected.label}</p>
-        </div>
-      ) : (
-        <p className="text-xs text-muted">Tap a node to read it.</p>
-      )}
+      <Sheet
+        open={Boolean(selected)}
+        title={selected?.kind ?? "Item"}
+        onClose={() => setSelectedId(null)}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          {selected?.kind}
+          {selected?.status ? ` · ${selected.status}` : ""}
+        </p>
+        <p className="mt-2 text-sm text-ink">{selected?.label}</p>
+        <p className="mt-3 text-xs text-muted">
+          Approve and edit from List view — graph is a map, not a second inbox.
+        </p>
+      </Sheet>
     </div>
   );
 }

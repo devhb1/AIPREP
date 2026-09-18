@@ -61,3 +61,36 @@ button {
   transition: background-color var(--motion), color var(--motion),
     border-color var(--motion), opacity var(--motion);
 }
+
+.surface-card {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1.25rem;
+}
+
+.btn-primary {
+  min-height: 2.75rem;
+  border-radius: var(--radius-btn);
+  background: var(--accent);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+body.interview-live .app-chrome,
+body.interview-live .workspace-nav-mobile,
+body.interview-live .workspace-rail {
+  display: none !important;
+}
+
+body.interview-live .safe-pad {
+  padding: 0;
+}
+
+@media (display-mode: standalone) {
+  .install-nudge {
+    display: none !important;
+  }
+}

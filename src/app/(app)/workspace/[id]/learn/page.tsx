@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useParams } from "next/navigation";
 import { LearnTabs } from "@/components/learn-tabs";
+import { Button, Chip } from "@/components/ui";
 
 type Citation = {
   index: number;
@@ -164,8 +165,8 @@ export default function LearnMentorPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[80vh] max-w-4xl flex-col pb-24">
-      <div className="mb-4 space-y-3">
+    <main className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <div className="mb-4 space-y-3 px-1">
         <h2 className="text-3xl text-ink sm:text-4xl">Learn</h2>
         <p className="text-sm text-muted">
           Mentor chat grounded in trusted memory and your PDFs.
@@ -173,7 +174,7 @@ export default function LearnMentorPage() {
         <LearnTabs workspaceId={workspaceId} />
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-line bg-panel p-5">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto rounded-[var(--radius-card)] border border-line bg-panel p-5">
         {items.map((item, idx) => (
           <div
             key={`${item.role}-${idx}`}
@@ -216,17 +217,16 @@ export default function LearnMentorPage() {
 
       {error ? <p className="mt-3 text-sm text-[var(--danger)]">{error}</p> : null}
 
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 -mx-1 mt-auto border-t border-line bg-background/95 px-1 pt-2 backdrop-blur lg:bottom-0">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {CHIPS.map(([label, prompt]) => (
-          <button
+          <Chip
             key={label}
-            type="button"
             disabled={loading}
             onClick={() => void sendMessage(prompt)}
-            className="min-h-10 shrink-0 rounded-full border border-line bg-panel px-3 text-xs font-semibold disabled:opacity-50"
           >
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -235,17 +235,14 @@ export default function LearnMentorPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about documents, syllabus, interview prep…"
-          className="min-h-11 flex-1 rounded-xl border border-line bg-white px-4 py-2 text-sm"
+          className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-white px-4 py-2 text-sm"
           disabled={loading}
         />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        >
+        <Button type="submit" disabled={loading || !input.trim()}>
           {loading ? "Streaming…" : "Send"}
-        </button>
+        </Button>
       </form>
+      </div>
     </main>
   );
 }

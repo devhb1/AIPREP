@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ensureProfile, requireUser } from "@/lib/auth/session";
 import { assertWithinDailyBudget } from "@/lib/analytics/usage";
 import { rateLimit } from "@/lib/rate-limit";
+import { discardAudioBuffer } from "@/lib/interview/audio-policy";
 import {
   answerTurnTextInterview,
   answerTurnVoiceInterview,
@@ -97,8 +98,10 @@ export async function POST(request: Request) {
           mimeType: file.type || "audio/webm",
           language: ["en", "hi", "mix"].includes(language) ? language : "en",
         });
+        discardAudioBuffer(bytes);
         return NextResponse.json(result);
       } catch (error) {
+        discardAudioBuffer(bytes);
         return jsonError(
           error instanceof Error ? error.message : "Voice turn failed",
           400,

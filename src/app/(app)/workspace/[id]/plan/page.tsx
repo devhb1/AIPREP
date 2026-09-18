@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { OnboardingChat } from "@/components/onboarding-chat";
+import { Button, Card, Skeleton, Timeline } from "@/components/ui";
 
 type Topic = {
   id: string;
@@ -94,6 +95,36 @@ export default function PlanPage() {
     return map;
   }, [topics]);
 
+  const phases = useMemo(() => {
+    const open = tasks.filter((t) => t.status !== "done" && t.status !== "completed");
+    return [
+      {
+        id: "foundation",
+        label: "Foundation",
+        detail: "Core syllabus and official facts.",
+        active: open.some((t) => t.taskType === "study" || t.taskType === "syllabus"),
+      },
+      {
+        id: "weakness",
+        label: "Weakness repair",
+        detail: intake?.weakAreas?.join(", ") || "Target weak areas from intake.",
+        active: Boolean(intake?.weakAreas?.length),
+      },
+      {
+        id: "practice",
+        label: "Practice",
+        detail: "MCQs, drills, and mocks.",
+        active: open.some((t) => t.taskType === "practice" || t.taskType === "mock"),
+      },
+      {
+        id: "review",
+        label: "Final review",
+        detail: `${intake?.daysUntilInterview ?? "—"} days to interview.`,
+        active: (intake?.daysUntilInterview ?? 99) <= 7,
+      },
+    ];
+  }, [tasks, intake]);
+
   return (
     <main className="mx-auto max-w-4xl space-y-6 pb-24">
       <div>
@@ -109,7 +140,7 @@ export default function PlanPage() {
       {booting ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-2xl bg-[var(--background)]" />
+            <Skeleton key={i} className="h-16" />
           ))}
         </div>
       ) : null}
@@ -129,23 +160,17 @@ export default function PlanPage() {
         />
       ) : (
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => {
               setShowWizard(true);
             }}
-            className="min-h-11 rounded-xl border border-line px-4 py-2 text-sm font-semibold"
           >
             {intake ? "Update intake" : "Start intake"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void generate()}
-            disabled={loading}
-            className="min-h-11 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
+          </Button>
+          <Button onClick={() => void generate()} disabled={loading}>
             {loading ? "Generating…" : plan ? "Regenerate plan" : "Generate plan"}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -154,7 +179,18 @@ export default function PlanPage() {
       ) : null}
 
       {intake && !showWizard ? (
-        <section className="rounded-2xl border border-line bg-panel p-5 text-sm">
+        <Card className="text-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Arc to interview day
+          </p>
+          <div className="mt-3">
+            <Timeline phases={phases} />
+          </div>
+        </Card>
+      ) : null}
+
+      {intake && !showWizard ? (
+        <section className="surface-card text-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
             Your intake
           </p>
@@ -170,7 +206,7 @@ export default function PlanPage() {
       ) : null}
 
       {plan ? (
-        <section className="rounded-2xl border border-line bg-panel p-5">
+        <section className="surface-card">
           <h3 className="text-2xl text-ink">{plan.title}</h3>
           <p className="mt-2 text-sm text-muted">{plan.summary}</p>
         </section>
@@ -218,7 +254,7 @@ export default function PlanPage() {
         ))}
       </section>
 
-      <section className="rounded-2xl border border-line bg-panel p-5 text-sm">
+      <section className="surface-card text-sm">
         <h3 className="text-lg text-ink">Settings</h3>
         <p className="mt-1 text-muted">Spend caps, export, and workspace reset.</p>
         <Link

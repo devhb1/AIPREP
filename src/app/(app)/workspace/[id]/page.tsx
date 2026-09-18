@@ -6,6 +6,7 @@ import { getWorkspaceBootstrap } from "@/lib/workspaces/bootstrap";
 import { InstallHomeScreenBanner } from "@/components/install-banner";
 import { TodayMission } from "@/components/today-mission";
 import { OnboardingChat } from "@/components/onboarding-chat";
+import { Card } from "@/components/ui";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -43,7 +44,7 @@ export default async function WorkspacePage({ params }: Props) {
         <h2 className="mt-1 text-3xl text-ink sm:text-4xl">{workspace.name}</h2>
       </div>
 
-      <section className="rounded-2xl border border-accent/30 bg-panel p-5 sm:p-6">
+      <Card className="border-accent/30 sm:p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
           Your next best action
         </p>
@@ -53,14 +54,14 @@ export default async function WorkspacePage({ params }: Props) {
           <span className="text-muted">~{nextBestAction.minutes} min</span>
           <Link
             href={actionHref(id, nextBestAction.href)}
-            className="min-h-11 rounded-xl bg-accent px-4 py-2.5 font-semibold text-white"
+            className="btn-primary inline-flex items-center"
           >
             {nextBestAction.title.length > 42
               ? "Open →"
               : nextBestAction.title}
           </Link>
         </div>
-      </section>
+      </Card>
 
       <section className="grid grid-cols-3 gap-3">
         {[
@@ -68,7 +69,7 @@ export default async function WorkspacePage({ params }: Props) {
           ["Last mock", stats.lastMockScore == null ? "—" : String(stats.lastMockScore)],
           ["Docs ready", String(stats.readyDocuments)],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-line bg-panel p-4">
+          <div key={label} className="surface-card p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
             <p className="mt-2 text-xl text-ink">{value}</p>
           </div>

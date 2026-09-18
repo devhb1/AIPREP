@@ -31,6 +31,9 @@ import { invalidateNba } from "@/lib/cache/ai-cache";
 
 export type JudgeMode = "easy" | "normal" | "strict";
 
+/** Hard cap on follow-up tokens (Appendix B / §9). */
+export const INTERVIEW_TURN_MAX_TOKENS = 140;
+
 function judgeInstructions(mode: JudgeMode) {
   if (mode === "easy") {
     return "Be encouraging. Ask clear questions. Give supportive follow-ups. Score generously but honestly.";
@@ -287,7 +290,7 @@ ${transcript.slice(0, 3500)}`,
       feature: "interview_turn",
       useCache: false,
       temperature: 0.3,
-      maxTokens: 140,
+      maxTokens: INTERVIEW_TURN_MAX_TOKENS,
     });
 
     let parsed = turnSchema.safeParse({

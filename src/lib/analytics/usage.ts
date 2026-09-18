@@ -2,6 +2,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { aiUsageEvents, workspaceSettings } from "@/lib/db/schema";
 import { redisSafe } from "@/lib/redis";
+import { DEFAULT_DAILY_AI_USD, DEFAULT_DAILY_VOICE_USD } from "@/lib/budget";
 
 function startOfUtcDay(date = new Date()) {
   const d = new Date(date);
@@ -98,7 +99,7 @@ export async function getUsageSummary(params: {
     .limit(1);
 
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? 0.5);
+  const maxDailyVoiceSpendUsd = Number(extra.maxDailyVoiceSpendUsd ?? DEFAULT_DAILY_VOICE_USD);
 
   return {
     todaySpendUsd: Number(todayRows[0]?.total ?? 0),
@@ -112,7 +113,7 @@ export async function getUsageSummary(params: {
       totalUsd: Number(row.total ?? 0),
       calls: Number(row.calls ?? 0),
     })),
-    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? 1.5,
+    maxDailyAiSpendUsd: settings[0]?.maxDailyAiSpendUsd ?? DEFAULT_DAILY_AI_USD,
     maxDailyVoiceSpendUsd,
   };
 }
@@ -127,7 +128,7 @@ export async function assertWithinDailyBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
 
-  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? 1.5;
+  const maxDaily = settings[0]?.maxDailyAiSpendUsd ?? DEFAULT_DAILY_AI_USD;
   const redisKey = `spend:${params.workspaceId}:${startOfUtcDay().toISOString().slice(0, 10)}`;
 
   const cached = await redisSafe(async (redis) => {
@@ -146,7 +147,7 @@ export async function assertWithinDailyBudget(params: {
 
   if (spent >= maxDaily) {
     throw new Error(
-      `Daily AI spend cap reached ($${spent.toFixed(4)} / $${maxDaily}). Raise the cap in Settings or wait until tomorrow.`,
+      `Daily AI spend cap reached ($${spent.toFixed(4)} / $${maxDaily}). Resets at 00:00 UTC. Raise the cap in Settings if you need more today.`,
     );
   }
 
@@ -165,7 +166,7 @@ export async function assertWithinVoiceBudget(params: {
     .where(eq(workspaceSettings.workspaceId, params.workspaceId))
     .limit(1);
   const extra = (settings[0]?.settings as Record<string, unknown> | null) ?? {};
-  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? 0.5);
+  const maxVoice = Number(extra.maxDailyVoiceSpendUsd ?? DEFAULT_DAILY_VOICE_USD);
 
   const start = startOfUtcDay();
   const rows = await db

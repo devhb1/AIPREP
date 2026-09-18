@@ -7,6 +7,8 @@ import {
   InterviewScorecard,
   type ScorecardReport,
 } from "@/components/interview-scorecard";
+import { Button, Chip } from "@/components/ui";
+import { INTERVIEW_AUDIO_POLICY } from "@/lib/interview/audio-policy";
 
 type Turn = {
   role: "interviewer" | "candidate";
@@ -66,6 +68,7 @@ export default function MockPanelPage() {
   const [report, setReport] = useState<ScorecardReport | null>(null);
   const [typed, setTyped] = useState("");
   const [showType, setShowType] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -81,6 +84,10 @@ export default function MockPanelPage() {
     if ([5, 10, 15].includes(mins)) setMinutes(mins);
     if (searchParams.get("consent") === "1") setConsent(true);
   }, [searchParams]);
+
+  useEffect(() => {
+    void fetch(`/api/interview/warmup?workspaceId=${workspaceId}`);
+  }, [workspaceId]);
 
   useEffect(() => {
     return () => {
@@ -322,23 +329,120 @@ export default function MockPanelPage() {
     status === "ending";
   const currentQuestion = [...turns].reverse().find((t) => t.role === "interviewer");
 
+  useEffect(() => {
+    if (!live) {
+      document.body.classList.remove("interview-live");
+      return;
+    }
+    document.body.classList.add("interview-live");
+    return () => document.body.classList.remove("interview-live");
+  }, [live]);
+
+  useEffect(() => {
+    if (!live) {
+      setElapsed(0);
+      return;
+    }
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [live]);
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
+
+  if (live) {
+    return (
+      <section className="fixed inset-0 z-[80] flex flex-col bg-background px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            {personaLabel}
+            {status === "thinking" ? " · considering" : ""}
+            {status === "recording" ? " · listening" : ""}
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="tabular-nums text-sm text-muted">
+              {mm}:{ss}
+            </span>
+            <button
+              type="button"
+              disabled={status === "ending" || status === "thinking"}
+              onClick={() => void finishSession()}
+              className="text-sm text-muted underline disabled:opacity-50"
+            >
+              End
+            </button>
+          </div>
+        </div>
+
+        {error ? (
+          <p className="mt-3 rounded-[var(--radius-btn)] border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]">
+            {error}
+          </p>
+        ) : null}
+
+        <p className="mt-8 flex-1 text-2xl leading-snug text-ink sm:text-3xl">
+          {currentQuestion?.content ?? "…"}
+        </p>
+
+        <button
+          type="button"
+          disabled={status === "thinking" || status === "ending"}
+          onClick={() => void toggleRecord()}
+          className={`flex min-h-28 w-full items-center justify-center rounded-[var(--radius-card)] text-base font-semibold text-white ${
+            status === "recording" ? "bg-[var(--danger)]" : "bg-accent"
+          } disabled:opacity-60`}
+        >
+          {status === "recording"
+            ? "Tap to send"
+            : status === "thinking"
+              ? `${personaLabel} is considering…`
+              : "Tap to speak"}
+        </button>
+
+        <button
+          type="button"
+          className="mt-3 min-h-11 text-sm font-semibold text-accent"
+          onClick={() => setShowType((v) => !v)}
+        >
+          {showType ? "Hide keyboard" : "Type instead"}
+        </button>
+
+        {showType ? (
+          <form onSubmit={sendTyped} className="mt-2 flex gap-2">
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              disabled={status !== "ready"}
+              placeholder="Type your answer…"
+              className="min-h-11 flex-1 rounded-[var(--radius-btn)] border border-line bg-white px-3 text-sm"
+            />
+            <Button type="submit" disabled={status !== "ready" || !typed.trim()}>
+              Send
+            </Button>
+          </form>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 pb-24">
-      {!live ? (
-        <div>
-          <Link href={`/workspace/${workspaceId}/interview`} className="text-sm text-accent">
-            ← Interview hub
-          </Link>
-          <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Mock panel</h2>
-          <p className="mt-2 text-sm text-muted">
-            HR opens, pedagogy probes, general awareness, then HR closes — like a
-            real KVS PRT panel.
-          </p>
-        </div>
-      ) : null}
+      <div>
+        <Link href={`/workspace/${workspaceId}/interview`} className="text-sm text-accent">
+          ← Interview hub
+        </Link>
+        <h2 className="mt-2 text-3xl text-ink sm:text-4xl">Mock panel</h2>
+        <p className="mt-2 text-sm text-muted">
+          HR opens, pedagogy probes, general awareness, then HR closes — like a
+          real KVS PRT panel.
+        </p>
+      </div>
 
       {error ? (
-        <p className="rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]">
+        <p className="rounded-[var(--radius-btn)] border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]">
           {error}
         </p>
       ) : null}
@@ -353,133 +457,72 @@ export default function MockPanelPage() {
         />
       ) : null}
 
-      {!live ? (
-        <section className="space-y-4 rounded-2xl border border-line bg-panel p-5">
+      <section className="surface-card space-y-4">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Duration
+          </p>
           <div className="flex flex-wrap gap-2">
             {[5, 10, 15].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMinutes(m)}
-                className={`min-h-11 rounded-xl px-4 text-sm font-semibold ${
-                  minutes === m
-                    ? "bg-accent text-white"
-                    : "border border-line bg-white"
-                }`}
-              >
+              <Chip key={m} active={minutes === m} onClick={() => setMinutes(m)}>
                 {m} min
-              </button>
+              </Chip>
             ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Language</span>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as InterviewLanguage)}
-                className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="mix">Mix (Hinglish)</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-muted">Judge mode</span>
-              <select
-                value={judgeMode}
-                onChange={(e) => setJudgeMode(e.target.value as typeof judgeMode)}
-                className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2"
-              >
-                <option value="easy">Easy</option>
-                <option value="normal">Normal</option>
-                <option value="strict">Strict</option>
-              </select>
-            </label>
-          </div>
-          <label className="flex min-h-11 items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-              className="mt-1"
-            />
-            <span>I consent to microphone capture and transcript storage for coaching.</span>
-          </label>
-          <button
-            type="button"
-            disabled={status === "starting"}
-            onClick={() => void startMock()}
-            className="min-h-12 w-full rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {status === "starting" ? "Starting…" : "Start mock panel"}
-          </button>
-        </section>
-      ) : (
-        <section className="space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-              {personaLabel}
-              {status === "thinking" ? " · considering" : ""}
-              {status === "recording" ? " · listening" : ""}
-            </p>
-            <button
-              type="button"
-              disabled={status === "ending" || status === "thinking"}
-              onClick={() => void finishSession()}
-              className="text-sm text-muted underline disabled:opacity-50"
-            >
-              End
-            </button>
-          </div>
-
-          <p className="text-2xl leading-snug text-ink sm:text-3xl">
-            {currentQuestion?.content ?? "…"}
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Judge
           </p>
-
-          <button
-            type="button"
-            disabled={status === "thinking" || status === "ending"}
-            onClick={() => void toggleRecord()}
-            className={`flex min-h-28 w-full items-center justify-center rounded-2xl text-base font-semibold text-white ${
-              status === "recording" ? "bg-[var(--danger)]" : "bg-accent"
-            } disabled:opacity-60`}
-          >
-            {status === "recording"
-              ? "Tap to send"
-              : status === "thinking"
-                ? `${personaLabel} is considering…`
-                : "Tap to speak"}
-          </button>
-
-          <button
-            type="button"
-            className="text-sm font-semibold text-accent"
-            onClick={() => setShowType((v) => !v)}
-          >
-            {showType ? "Hide keyboard" : "Type instead"}
-          </button>
-
-          {showType ? (
-            <form onSubmit={sendTyped} className="flex gap-2">
-              <input
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                disabled={status !== "ready"}
-                placeholder="Type your answer…"
-                className="min-h-11 flex-1 rounded-xl border border-line bg-white px-3 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={status !== "ready" || !typed.trim()}
-                className="min-h-11 rounded-xl bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60"
+          <div className="flex flex-wrap gap-2">
+            {(["easy", "normal", "strict"] as const).map((m) => (
+              <Chip key={m} active={judgeMode === m} onClick={() => setJudgeMode(m)}>
+                {m}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+            Language
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["en", "EN"],
+                ["hi", "HI"],
+                ["mix", "Mix"],
+              ] as const
+            ).map(([value, label]) => (
+              <Chip
+                key={value}
+                active={language === value}
+                onClick={() => setLanguage(value)}
               >
-                Send
-              </button>
-            </form>
-          ) : null}
-        </section>
-      )}
+                {label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <label className="flex min-h-11 items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            I consent to microphone capture. {INTERVIEW_AUDIO_POLICY.userCopy}
+          </span>
+        </label>
+        <Button
+          className="w-full"
+          disabled={status === "starting"}
+          onClick={() => void startMock()}
+        >
+          {status === "starting" ? "Starting…" : "Start mock panel"}
+        </Button>
+      </section>
     </main>
   );
 }
