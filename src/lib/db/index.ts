@@ -2,11 +2,18 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
+/** Prefer Session pooler on Vercel (IPv4). Direct db.*.supabase.co is often unresolvable there. */
+export function resolveDatabaseUrl() {
+  const direct = process.env.DATABASE_URL?.trim();
+  const pooler = process.env.SESSION_POOLER_URL?.trim();
+
+  if (pooler) return pooler;
+  if (direct) return direct;
+  throw new Error("DATABASE_URL (or SESSION_POOLER_URL) is not set");
+}
+
 function createDb() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set");
-  }
+  const connectionString = resolveDatabaseUrl();
 
   const withSsl = connectionString.includes("sslmode=")
     ? connectionString
