@@ -51,19 +51,36 @@ CRON_SECRET
 JOB_WORKER_SECRET
 ```
 
+For this deployment set:
+
+```text
+NEXT_PUBLIC_APP_URL=https://aiprep-kappa.vercel.app
+```
+
 Primary region is `bom1` (Mumbai) via `vercel.json`. Cron hits `/api/jobs/worker` daily at 03:00 UTC on Hobby (upgrade to Pro for frequent drains). You can also hit the worker manually with `CRON_SECRET`.
 
 5. Deploy.
 
 ## 3. Supabase Auth redirect URLs
 
-Add:
+In **Supabase → Authentication → URL Configuration**:
+
+**Site URL** (default after email confirm — must be production):
 
 ```text
-https://YOUR_DOMAIN/auth/callback
+https://aiprep-kappa.vercel.app
+```
+
+**Redirect URLs** (allow list — add all):
+
+```text
+https://aiprep-kappa.vercel.app/**
+https://aiprep-kappa.vercel.app/auth/callback
+http://localhost:3000/**
 http://localhost:3000/auth/callback
 ```
 
+Signup emails use `emailRedirectTo` → `{NEXT_PUBLIC_APP_URL}/auth/callback`. If Site URL stays on `http://localhost:3000`, confirm links will open localhost even for production signups.
 ## 4. Post-deploy smoke checklist
 
 1. Sign up / sign in

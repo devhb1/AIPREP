@@ -55,12 +55,24 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
+  const emailRedirectTo = getAuthCallbackUrl();
+  // Guard: production must never mint localhost confirm links.
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    /localhost|127\.0\.0\.1/i.test(emailRedirectTo)
+  ) {
+    return {
+      error:
+        "Auth redirect is misconfigured (localhost). Set NEXT_PUBLIC_APP_URL to the production site and update Supabase Site URL.",
+    };
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName || undefined },
-      emailRedirectTo: getAuthCallbackUrl(),
+      emailRedirectTo,
     },
   });
 
